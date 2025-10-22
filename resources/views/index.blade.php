@@ -1,9 +1,69 @@
 @extends("layouts.app")
-
+@section("title", "Nutri Ana Vertuan")
 @section("main")
-    <div class="row container">
-        <div class="card shadow p-3 m-3">
-            <h1>Pagina inicial</h1>
+  
+    <!-- Hero Section -->
+    <header class="bg-success text-white text-center py-5">
+        <div class="container">
+        <h1 class="display-4">Nutri Ana Vertuan</h1>
+        <p class="lead">Cuidando da sua saúde e bem-estar através da nutrição</p>
+        <a href="https://wa.me/5511975712377" target="_blank" class="btn btn-light btn-lg mt-3">Agende sua consulta</a>
         </div>
-    </div>
+    </header>
+
+    <!-- Sobre -->
+    <section id="sobre" class="py-5">
+        <div class="container">
+        <div class="row align-items-center">
+            <div class="col-md-6">
+            <img src="storage/perfil.jpg" class="img-fluid rounded shadow" alt="Nutricionista">
+            </div>
+            <div class="col-md-6">
+            <h2>Sobre mim</h2>
+            <p>Sou a <strong>Nutri Ana Vertuan</strong>, nutricionista dedicada a promover saúde e qualidade de vida por meio de uma alimentação equilibrada e personalizada. Meu objetivo é ajudar você a alcançar seus objetivos de forma saudável e sustentável.</p>
+            </div>
+        </div>
+        </div>
+    </section>
+
+    <!-- Serviços -->
+    <section id="servicos" class="py-5 bg-light">
+        <div class="container text-center">
+        <h2 class="mb-4">Serviços</h2>
+        <div class="row">
+            <div class="col-md-4">
+            <div class="card shadow-sm p-3">
+                <h5 class="card-title">Consultas Individuais</h5>
+                <p class="card-text">Planos alimentares personalizados de acordo com suas necessidades.</p>
+            </div>
+            </div>
+            <div class="col-md-4">
+            <div class="card shadow-sm p-3">
+                <h5 class="card-title">Acupuntura</h5>
+                <p class="card-text">Tratamento terapêutico que promove equilíbrio físico e emocional através de técnicas tradicionais chinesas.</p>
+            </div>
+            </div>
+            <div class="col-md-4">
+            <div class="card shadow-sm p-3">
+                <h5 class="card-title">Reflexologia</h5>
+                <p class="card-text">Terapia natural que estimula pontos específicos dos pés para promover relaxamento, equilíbrio e bem-estar geral.</p>
+            </div>
+            </div>
+        </div>
+        </div>
+    </section>
+
+    <!-- Contato -->
+    <section id="contato" class="py-5">
+        <div class="container text-center">
+        <h2 class="mb-4">Entre em Contato</h2>
+        <p>Agende sua consulta ou tire suas dúvidas:</p>
+        <a href="mailto:contato@nutrianavertuan.com" class="btn btn-success btn-lg">contato@nutrianavertuan.com.br</a>
+        </div>
+    </section>
+@endsection
+@section("footer")
+<footer class="bg-dark text-white text-center py-3">
+    <p class="mb-0">&copy; 2025 Nutri Ana Vertuan - Todos os direitos reservados</p>
+</footer>
 @endsection

@@ -16,11 +16,11 @@
         <div class="container">
         <div class="row align-items-center">
             <div class="col-md-6">
-            <img src="storage/perfil.jpg" class="img-fluid rounded shadow" alt="Nutricionista">
+            <img src="storage/perfil.png?time={{date("His")}}" class="img-fluid rounded shadow" alt="Nutricionista">
             </div>
             <div class="col-md-6">
-            <h2>Sobre mim</h2>
-            <p>Sou a <strong>Nutri Ana Vertuan</strong>, nutricionista dedicada a promover saúde e qualidade de vida por meio de uma alimentação equilibrada e personalizada. Meu objetivo é ajudar você a alcançar seus objetivos de forma saudável e sustentável.</p>
+                <h2>Sobre mim</h2>
+                <p>Sou a <strong>Nutri Ana Vertuan</strong>, nutricionista dedicada a promover saúde e qualidade de vida por meio de uma abordagem integrativa. Além da alimentação equilibrada e personalizada, também atuo com <strong>acupuntura</strong> e <strong>reflexologia</strong>, técnicas que potencializam o bem-estar físico e emocional. Meu objetivo é ajudar você a alcançar seus objetivos de forma saudável, sustentável e completa — cuidando do corpo, da mente e da energia vital.</p>
             </div>
         </div>
         </div>
@@ -64,6 +64,6 @@
 @endsection
 @section("footer")
 <footer class="bg-dark text-white text-center py-3">
-    <p class="mb-0">&copy; 2025 Nutri Ana Vertuan - Todos os direitos reservados</p>
+    <p class="mb-0">&copy; {{date("Y")}} Nutri Ana Vertuan - Todos os direitos reservados - By Evtu</p>
 </footer>
 @endsection

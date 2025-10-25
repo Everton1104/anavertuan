@@ -20,7 +20,7 @@
             </div>
             <div class="col-md-6">
                 <h2>Sobre mim</h2>
-                <p>Sou a <strong>Nutri Ana Vertuan</strong>, nutricionista dedicada a promover saúde e qualidade de vida por meio de uma abordagem integrativa. Além da alimentação equilibrada e personalizada, também atuo com <strong>acupuntura</strong> e <strong>reflexologia</strong>, técnicas que potencializam o bem-estar físico e emocional. Meu objetivo é ajudar você a alcançar seus objetivos de forma saudável, sustentável e completa — cuidando do corpo, da mente e da energia vital.</p>
+                <p>Sou a <strong>Nutri Ana Vertuan</strong>, nutricionista dedicada a promover saúde e qualidade de vida por meio de uma abordagem integrativa. Além da alimentação equilibrada e personalizada, também atuo com <strong>auriculoterapia</strong>, técnica que potencializa o bem-estar físico e emocional. Meu objetivo é ajudar você a alcançar seus objetivos de forma saudável, sustentável e completa — cuidando do corpo, da mente e da energia vital.</p>
             </div>
         </div>
         </div>
@@ -31,23 +31,17 @@
         <div class="container text-center">
         <h2 class="mb-4">Serviços</h2>
         <div class="row">
-            <div class="col-md-4">
-            <div class="card shadow-sm p-3">
-                <h5 class="card-title">Consultas Individuais</h5>
-                <p class="card-text">Planos alimentares personalizados de acordo com suas necessidades.</p>
+            <div class="col-md-6">
+                <div class="card shadow-sm p-3">
+                    <h5 class="card-title">Consultas Individuais</h5>
+                    <p class="card-text">Atendimento personalizado com plano alimentar adaptado à sua rotina, objetivos e preferências. Foco em saúde, bem-estar e resultados sustentáveis.</p>
+                </div>
             </div>
-            </div>
-            <div class="col-md-4">
-            <div class="card shadow-sm p-3">
-                <h5 class="card-title">Acupuntura</h5>
-                <p class="card-text">Tratamento terapêutico que promove equilíbrio físico e emocional através de técnicas tradicionais chinesas.</p>
-            </div>
-            </div>
-            <div class="col-md-4">
-            <div class="card shadow-sm p-3">
-                <h5 class="card-title">Reflexologia</h5>
-                <p class="card-text">Terapia natural que estimula pontos específicos dos pés para promover relaxamento, equilíbrio e bem-estar geral.</p>
-            </div>
+            <div class="col-md-6">
+                <div class="card shadow-sm p-3">
+                    <h5 class="card-title">Auriculoterapia</h5>
+                    <p class="card-text">Terapia complementar que estimula pontos específicos na orelha para promover equilíbrio físico e emocional, baseada nos princípios da medicina tradicional chinesa.</p>
+                </div>
             </div>
         </div>
         </div>

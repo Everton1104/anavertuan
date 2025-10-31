@@ -3,7 +3,7 @@
 @section("main")
     <style>
         .cover {
-            background-image: url("{{ Storage::url('fundo.png') }}");
+            background-image: url("{{ Storage::url('fundo.png') }}?time={{date("His")}}");
             background-repeat: no-repeat;
             background-size: cover;
             height: 100vh;
@@ -38,7 +38,7 @@
         <div class="container">
             <div class="row align-items-center text-center">
                 <div class="mb-4 col-12 d-flex justify-content-center">
-                    <img src="{{ Storage::url('logo-lg.png') }}" alt="Nutri Ana Vertuan" class="img-fluid w-50">
+                    <img src="{{ Storage::url('logo-lg.png') }}?time={{date("His")}}" alt="Nutri Ana Vertuan" class="img-fluid w-50">
                 </div>
                 <div class="mb-4 col-12">
                     <p class="lead">Cuidando da sua saúde e bem-estar através da nutrição</p>

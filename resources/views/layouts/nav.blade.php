@@ -8,7 +8,7 @@
     <div class="container">
         <div class="row align-items-center">
             <div class="col-6 py-3">
-                <img src="{{ Storage::url('logo-lg.png') }}" alt="Nutri Ana Vertuan" class="img-fluid" style="width: 15vh">
+                <img src="{{ Storage::url('logo-lg.png') }}?time={{date("His")}}" alt="Nutri Ana Vertuan" class="img-fluid" style="width: 15vh">
             </div>
             <div class="col-6 text-end form-text text-secondary">
                 <a href="#sobre" class="me-3">Sobre</a>

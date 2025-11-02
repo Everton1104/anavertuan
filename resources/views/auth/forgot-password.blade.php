@@ -1,5 +1,5 @@
 @extends('layouts.app')
-
+@section("title", "Redefinir Senha")
 @section('main')
     @if(session('status'))
         <div class="text-success text-center my-5">

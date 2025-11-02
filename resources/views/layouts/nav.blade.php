@@ -11,10 +11,11 @@
                 <img src="{{ Storage::url('logo-lg.png') }}?time={{date("His")}}" alt="Nutri Ana Vertuan" class="img-fluid" style="width: 15vh;cursor: pointer">
             </div>
             <div class="col-6 text-end form-text text-secondary">
-                <a href="#sobre" class="me-3">Sobre</a>
-                <a href="#servicos" class="me-3">Atendimentos</a>
-                <a href="#contato" class="me-3">Contato</a>
+                <a href="{{url('/')}}/#sobre" class="me-3">Sobre</a>
+                <a href="{{url('/')}}/#servicos" class="me-3">Atendimentos</a>
+                <a href="{{url('/')}}/#contato" class="me-3">Contato</a>
                 @if(isset(Auth::user()->id))
+                    <a href="dashboard" class="me-3">Dashboard</a>
                     <a href="#" onclick="$('#logout-form').submit()">Sair</a>
                 @else
                     <a href="{{url('/')}}/login">Login</a>
@@ -25,21 +26,25 @@
 </nav>
 
 <div class="side-menu">
-    <div class="menu-item" onclick="$('.menu-icon').click() && setTimeout(()=>{window.location.href='/#sobre'},500)">
+    <div class="menu-item" onclick="$('.menu-icon').click() && setTimeout(()=>{window.location.href='{{url('/')}}/#sobre'},500)">
         Sobre
     </div>
-    <div class="menu-item" onclick="$('.menu-icon').click() && setTimeout(()=>{window.location.href='/#servicos'},500)">
+    <div class="menu-item" onclick="$('.menu-icon').click() && setTimeout(()=>{window.location.href='{{url('/')}}/#servicos'},500)">
         Atendimentos
     </div>
-    <div class="menu-item" onclick="$('.menu-icon').click() && setTimeout(()=>{window.location.href='/#contato'},500)">
+    <div class="menu-item" onclick="$('.menu-icon').click() && setTimeout(()=>{window.location.href='{{url('/')}}/#contato'},500)">
         Contato
     </div>
 
+    {{-- Rotas autenticadas --}}
     @if(isset(Auth::user()->id))
+        <div class="menu-item" onclick="window.location.href='dashboard'">
+            Dashboard
+        </div>
         {{-- LOGOUT --}}
         <div class="menu-item menu-bottom" onclick="$('#logout-form').submit()">
             SAIR
-            <form id="logout-form" action="/logout" method="POST">
+            <form id="logout-form" action="{{url('/')}}/logout" method="POST">
                 @csrf
                 @method('POST')
             </form>

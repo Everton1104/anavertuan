@@ -1,5 +1,5 @@
 @extends('layouts.app')
-
+@section("title", "LOGIN")
 @section('main')
     @if (strpos(url()->current(), 'reset-password') == true)
         @if (session('status'))

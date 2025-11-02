@@ -1,5 +1,5 @@
 @extends("layouts.app")
-@section("title", "Nutri Ana Vertuan")
+@section("title", "Início")
 @section("main")
     <style>
         .cover {

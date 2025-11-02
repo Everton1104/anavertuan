@@ -7,12 +7,12 @@
 <nav class="nav shadow-sm d-none d-md-block">
     <div class="container">
         <div class="row align-items-center">
-            <div class="col-6 py-3">
-                <img src="{{ Storage::url('logo-lg.png') }}?time={{date("His")}}" alt="Nutri Ana Vertuan" class="img-fluid" style="width: 15vh">
+            <div class="col-6 py-3" onclick="window.location.href='/'">
+                <img src="{{ Storage::url('logo-lg.png') }}?time={{date("His")}}" alt="Nutri Ana Vertuan" class="img-fluid" style="width: 15vh;cursor: pointer">
             </div>
             <div class="col-6 text-end form-text text-secondary">
                 <a href="#sobre" class="me-3">Sobre</a>
-                <a href="#servicos" class="me-3">Serviços</a>
+                <a href="#servicos" class="me-3">Atendimentos</a>
                 <a href="#contato">Contato</a>
             </div>
         </div>
@@ -20,31 +20,33 @@
 </nav>
 
 <div class="side-menu">
-    <div class="menu-item" onclick="$('.menu-icon').click() && setTimeout(()=>{window.location.href='#sobre'},500)">
+    <div class="menu-item" onclick="$('.menu-icon').click() && setTimeout(()=>{window.location.href='/#sobre'},500)">
         Sobre
     </div>
-    <div class="menu-item" onclick="$('.menu-icon').click() && setTimeout(()=>{window.location.href='#servicos'},500)">
-        Serviços
+    <div class="menu-item" onclick="$('.menu-icon').click() && setTimeout(()=>{window.location.href='/#servicos'},500)">
+        Atendimentos
     </div>
-    <div class="menu-item" onclick="$('.menu-icon').click() && setTimeout(()=>{window.location.href='#contato'},500)">
+    <div class="menu-item" onclick="$('.menu-icon').click() && setTimeout(()=>{window.location.href='/#contato'},500)">
         Contato
     </div>
 
-    {{-- LOGOUT --}}
-    <div class="menu-item menu-sair" onclick="$('#logout-form').submit()">
-        SAIR
-        <form id="logout-form" action="/logout" method="POST">
-            @csrf
-            @method('POST')
-        </form>
-    </div>
+    @if(isset(Auth::user()->id))
+        {{-- LOGOUT --}}
+        <div class="menu-item menu-sair" onclick="$('#logout-form').submit()">
+            SAIR
+            <form id="logout-form" action="/logout" method="POST">
+                @csrf
+                @method('POST')
+            </form>
+        </div>
+    @endif
 </div>
 
 {{-- Backdrop --}}
 <div class="backdrop-menu position-fixed d-none vw-100 vh-100"></div>
 <div class="d-md-none d-block">
-    <svg class="menu-icon" id="menu-bars" height="2rem" viewBox="0 -960 960 960" width="2rem" fill="#a6a6a6"><path d="M120-240v-80h720v80H120Zm0-200v-80h720v80H120Zm0-200v-80h720v80H120Z"/></svg>
-    <svg class="menu-icon d-none" id="menu-times" height="2rem" viewBox="0 -960 960 960" width="2rem" fill="#a6a6a6"><path d="m256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z"/></svg>
+    <svg class="menu-icon" id="menu-bars" height="2rem" viewBox="0 -960 960 960" width="2rem" fill="#a16e51"><path d="M120-240v-80h720v80H120Zm0-200v-80h720v80H120Zm0-200v-80h720v80H120Z"/></svg>
+    <svg class="menu-icon d-none" id="menu-times" height="2rem" viewBox="0 -960 960 960" width="2rem" fill="#a16e51"><path d="m256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z"/></svg>
 </div>
 
 <style>

@@ -22,13 +22,25 @@
         }
 
         .hero {
-            background-color: var(--marrom);
+            background-color: var(--bege);
         }
 
         .btn-agendar {
-            background-color: var(--cinza);
+            background-color: var(--marrom);
         }
-    
+
+        .btn-contato {
+            background-color: var(--marrom);
+        }
+
+        @font-face {
+            font-family: 'Troye Sans';
+            src: url("{{ Storage::url('public/fonts/troye-sans.ttf') }}");
+        }
+        .sub-titulo {
+            font-family: 'Troye Sans', sans-serif;
+        }
+
     </style>
 
     <div class="cover"></div>
@@ -38,7 +50,7 @@
         <div class="container">
             <div class="row align-items-center text-center">
                 <div class="mb-4 col-12 d-flex justify-content-center">
-                    <img src="{{ Storage::url('logo-lg.png') }}?time={{date("His")}}" alt="Nutri Ana Vertuan" class="img-fluid w-50">
+                    <img src="{{ Storage::url('logo-lg-bege.png') }}?time={{date("His")}}" alt="Nutri Ana Vertuan" class="img-fluid w-50">
                 </div>
                 <div class="mb-4 col-12">
                     <p class="lead">Cuidando da sua saúde e bem-estar através da nutrição</p>
@@ -68,17 +80,17 @@
     <!-- Serviços -->
     <section id="servicos" class="py-5">
         <div class="container text-center">
-            <p class="mb-4 fs-2">Serviços</p>
+            <p class="mb-4 fs-2 sub-titulo">Atendimentos</p>
             <div class="row">
                 <div class="col-md-6 mb-2 m-md-0">
-                    <div class="card shadow-sm p-2" style="height: 180px">
-                        <h5 class="card-title">Consultas Individuais</h5>
+                    <div class="card shadow-sm p-3">
+                        <h5 class="card-title fs-5">Consultas Individuais</h5>
                         <p class="card-text">Atendimento personalizado com plano alimentar adaptado à sua rotina, objetivos e preferências. Foco em saúde, bem-estar e resultados sustentáveis.</p>
                     </div>
                 </div>
                 <div class="col-md-6 mb-2 m-md-0">
-                    <div class="card shadow-sm p-3" style="height: 180px">
-                        <h5 class="card-title">Auriculoterapia</h5>
+                    <div class="card shadow-sm p-3">
+                        <h5 class="card-title fs-5">Auriculoterapia</h5>
                         <p class="card-text">Terapia complementar que estimula pontos específicos na orelha para promover equilíbrio físico e emocional, baseada nos princípios da medicina tradicional chinesa.</p>
                     </div>
                 </div>
@@ -89,9 +101,9 @@
     <!-- Contato -->
     <section id="contato" class="py-5">
         <div class="container text-center">
-        <h2 class="mb-4 fs-2">Entre em Contato</h2>
+        <h2 class="mb-4 fs-2 sub-titulo">Entre em Contato</h2>
         <p>Agende sua consulta ou tire suas dúvidas:</p>
-        <a href="mailto:contato@nutrianavertuan.com" class="btn btn-success">contato@nutrianavertuan.com.br</a>
+        <a href="mailto:contato@anavertuan.com.br" class="btn btn-contato btn-outline-light">contato@anavertuan.com.br</a>
         </div>
     </section>
 @endsection

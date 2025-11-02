@@ -8,8 +8,8 @@
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
         <meta name="msapplication-navbutton-color" content="#f6f0e6">
         <meta name="csrf-token" content="{{ csrf_token() }}">
-        <link rel="apple-touch-icon" href="storage/favicon.ico?time={{time()}}">
-        <link rel="icon" href="storage/favicon.ico?time={{time()}}" type="image/x-icon">
+        <link rel="apple-touch-icon" href="/storage/favicon.ico?time={{time()}}">
+        <link rel="icon" href="/storage/favicon.ico?time={{time()}}" type="image/x-icon">
         <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>

@@ -13,7 +13,12 @@
             <div class="col-6 text-end form-text text-secondary">
                 <a href="#sobre" class="me-3">Sobre</a>
                 <a href="#servicos" class="me-3">Atendimentos</a>
-                <a href="#contato">Contato</a>
+                <a href="#contato" class="me-3">Contato</a>
+                @if(isset(Auth::user()->id))
+                    <a href="#" onclick="$('#logout-form').submit()">Sair</a>
+                @else
+                    <a href="{{url('/')}}/login">Login</a>
+                @endif
             </div>
         </div>
     </div>
@@ -32,12 +37,17 @@
 
     @if(isset(Auth::user()->id))
         {{-- LOGOUT --}}
-        <div class="menu-item menu-sair" onclick="$('#logout-form').submit()">
+        <div class="menu-item menu-bottom" onclick="$('#logout-form').submit()">
             SAIR
             <form id="logout-form" action="/logout" method="POST">
                 @csrf
                 @method('POST')
             </form>
+        </div>
+    @else
+        {{-- LOGOUT --}}
+        <div class="menu-item menu-bottom" onclick="window.location.href='{{url('/')}}/login'">
+            LOGIN
         </div>
     @endif
 </div>
@@ -57,9 +67,10 @@
         top: 5px;
         right: 5px;
     }
-    .menu-sair {
+    .menu-bottom {
         position: absolute ;
-        bottom: 15px;
+        bottom: 10px;
+        font-size: 10px;
     }
     .side-menu {
         position: fixed;

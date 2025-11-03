@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\ProfileController;
 use App\Models\User;
 use Illuminate\Support\Facades\Route;
@@ -13,10 +14,8 @@ Route::get('/dashboard', function () {
     return view('dashboard', compact('users'));
 })->middleware(['auth', 'verified'])->name('dashboard');
 
-// Route::middleware('auth')->group(function () {
-//     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
-//     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
-//     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
-// });
+Route::post('add-usuario', [RegisteredUserController::class, 'store'])->middleware(['auth', 'verified'])->name('add-usuario');
+Route::post('delete-usuario', [RegisteredUserController::class, 'delete'])->middleware('auth')->name('delete-usuario');
+Route::post('editar-usuario', [RegisteredUserController::class, 'editar'])->middleware('auth')->name('editar-usuario');
 
 require __DIR__.'/auth.php';

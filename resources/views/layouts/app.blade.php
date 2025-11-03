@@ -29,6 +29,7 @@
     <body>
         @include("layouts.nav")
         <main>
+            @include('components.msg')
             @yield("main")
         </main>
         <footer>

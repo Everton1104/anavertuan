@@ -13,14 +13,14 @@
                     <!-- Name -->
                     <div>
                         <x-input-label for="name" :value="__('Nome')" />
-                        <x-text-input id="name" class="block mt-1 w-full" type="text" name="nome" :value="old('nome')" required autofocus autocomplete="name" />
+                        <x-text-input id="name" class="block mt-1 w-full  form-control" type="text" name="nome" :value="old('nome')" required autofocus autocomplete="name" />
                         <x-input-error :messages="$errors->get('nome')" class="mt-2" />
                     </div>
 
                     <!-- Email Address -->
                     <div class="mt-4">
                         <x-input-label for="email" :value="__('Email')" />
-                        <x-text-input id="email" class="block mt-1 w-full" type="email" name="email" :value="old('email')" required autocomplete="username" />
+                        <x-text-input id="email" class="block mt-1 w-full  form-control" type="email" name="email" :value="old('email')" required autocomplete="username" />
                         <x-input-error :messages="$errors->get('email')" class="mt-2" />
                     </div>
 
@@ -28,7 +28,7 @@
                     <div class="mt-4">
                         <x-input-label for="password" :value="__('Senha')" />
 
-                        <x-text-input id="password" class="block mt-1 w-full"
+                        <x-text-input id="password" class="block mt-1 w-full  form-control"
                                         type="password"
                                         name="senha"
                                         required autocomplete="new-password" />
@@ -40,7 +40,7 @@
                     <div class="mt-4">
                         <x-input-label for="password_confirmation" :value="__('Confirmar Senha')" />
 
-                        <x-text-input id="password_confirmation" class="block mt-1 w-full"
+                        <x-text-input id="password_confirmation" class="block mt-1 w-full  form-control"
                                         type="password"
                                         name="senha_confirmation" required autocomplete="new-password" />
 

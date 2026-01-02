@@ -99,14 +99,26 @@
 
             @php
                 use App\Models\AgendamentoModel;
-                $consultas = AgendamentoModel::with(['user', 'servico'])
-                    ->orderBy('data_inicio')
-                    ->get()
-                    ->groupBy(function ($item) {
-                        return \Carbon\Carbon::parse($item->data_inicio)
-                            ->locale('pt_BR')
-                            ->translatedFormat('F Y'); // Ex: "Janeiro 2026"
-                    });
+                if(auth()->user()->adm == 1 || auth()->user()->func == 1){
+                    $consultas = AgendamentoModel::with(['user', 'servico'])
+                        ->orderBy('data_inicio')
+                        ->get()
+                        ->groupBy(function ($item) {
+                            return \Carbon\Carbon::parse($item->data_inicio)
+                                ->locale('pt_BR')
+                                ->translatedFormat('F Y'); // Ex: "Janeiro 2026"
+                        });
+                }else{
+                    $consultas = AgendamentoModel::with(['user', 'servico'])
+                        ->where('user_id','=',Auth()->user()->id)
+                        ->orderBy('data_inicio')
+                        ->get()
+                        ->groupBy(function ($item) {
+                            return \Carbon\Carbon::parse($item->data_inicio)
+                                ->locale('pt_BR')
+                                ->translatedFormat('F Y'); // Ex: "Janeiro 2026"
+                        });
+                }
                 $mesAtual = now()->locale('pt_BR')->translatedFormat('F Y');
             @endphp
 

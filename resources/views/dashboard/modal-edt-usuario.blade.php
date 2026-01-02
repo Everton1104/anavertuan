@@ -15,14 +15,14 @@
                     <!-- Name -->
                     <div>
                         <x-input-label for="edt-name" :value="__('Nome')" />
-                        <x-text-input id="edt-name" class="block mt-1 w-full" type="text" name="nome" :value="old('nome')" required autofocus autocomplete="edt-name" />
+                        <x-text-input id="edt-name" class="block mt-1 w-full form-control" type="text" name="nome" :value="old('nome')" required autofocus autocomplete="edt-name" />
                         <x-input-error :messages="$errors->get('nome')" class="mt-2" />
                     </div>
 
                     <!-- Email Address -->
                     <div class="mt-4">
                         <x-input-label for="edt-email" :value="__('Email')" />
-                        <x-text-input id="edt-email" class="block mt-1 w-full" type="email" name="email" :value="old('email')" required autocomplete="edt-username" />
+                        <x-text-input id="edt-email" class="block mt-1 w-full form-control" type="email" name="email" :value="old('email')" required autocomplete="edt-username" />
                         <x-input-error :messages="$errors->get('email')" class="mt-2" />
                     </div>
 
@@ -30,7 +30,7 @@
                     <div class="mt-4">
                         <x-input-label for="edt-password" :value="__('Mudar Senha')" />
 
-                        <x-text-input id="edt-password" class="block mt-1 w-full"
+                        <x-text-input id="edt-password" class="block mt-1 w-full form-control"
                                         type="password"
                                         name="senha"
                                         required autocomplete="new-password" />
@@ -42,7 +42,7 @@
                     <div class="mt-4">
                         <x-input-label for="edt-password_confirmation" :value="__('Confirmar Senha')" />
 
-                        <x-text-input id="edt-password_confirmation" class="block mt-1 w-full"
+                        <x-text-input id="edt-password_confirmation" class="block mt-1 w-full form-control"
                                         type="password"
                                         name="senha_confirmation" required autocomplete="new-password" />
 

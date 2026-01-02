@@ -15,8 +15,8 @@ return new class extends Migration
             $table->id();
             $table->bigInteger('user_id');
             $table->bigInteger('servico_id');
-            $table->date('data_inicio');
-            $table->date('data_fim');
+            $table->dateTime('data_inicio');
+            $table->dateTime('data_fim');
             $table->timestamps();
         });
 

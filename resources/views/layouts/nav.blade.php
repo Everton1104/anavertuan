@@ -11,14 +11,14 @@
                 <img src="{{ Storage::url('logo-lg.png') }}?time={{date("His")}}" alt="Nutri Ana Vertuan" class="img-fluid" style="width: 15vh;cursor: pointer">
             </div>
             <div class="col-6 text-end form-text text-secondary">
-                <a href="{{url('/')}}/#sobre" class="me-3">Sobre</a>
-                <a href="{{url('/')}}/#servicos" class="me-3">Atendimentos</a>
-                <a href="{{url('/')}}/#contato" class="me-3">Contato</a>
+                <a href="{{url('/')}}/#sobre" class="menu-item-sm">Sobre</a>
+                <a href="{{url('/')}}/#servicos" class="menu-item-sm">Atendimentos</a>
+                <a href="{{url('/')}}/#contato" class="menu-item-sm">Contato</a>
                 @if(isset(Auth::user()->id))
-                    <a href="dashboard" class="me-3">Dashboard</a>
-                    <a href="#" onclick="$('#logout-form').submit()">Sair</a>
+                    <a href="dashboard" class="menu-item-sm">Dashboard</a>
+                    <a href="#" class="menu-item-sm" onclick="$('#logout-form').submit()">Sair</a>
                 @else
-                    <a href="{{url('/')}}/login">Login</a>
+                    <a class="menu-item-sm" href="{{url('/')}}/login">Login</a>
                 @endif
             </div>
         </div>
@@ -94,6 +94,14 @@
         z-index: 999;
         padding: 10px;
         width: 100%;
+    }
+    .menu-item-sm {
+        cursor: pointer;
+        z-index: 999;
+        padding: 10px;
+        width: 100%;
+        text-decoration: none;
+        color: black;
     }
     .menu-item:hover {
         background-color: var(--cinza);

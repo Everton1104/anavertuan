@@ -16,7 +16,6 @@
         <title>@yield("title") - Nutri Ana Vertuan</title>
         @yield("style")
         @yield("scriptTop")
-        @vite(['resources/css/app.css', 'resources/js/app.js'])
         <style>
             :root {
                 --marrom: #a16e51;

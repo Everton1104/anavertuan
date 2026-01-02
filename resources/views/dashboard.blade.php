@@ -2,32 +2,30 @@
 @section("title", "Dashboard")
 @section('style')
     <style>
-        .fc-button {
-            background-color: var(--marrom) !important;
-            border-color: var(--cinza) !important;
-        }
         .card-header {
             background-color: var(--branco);
         }
-        #calendar {
-            max-width: 100%;
-            margin: 0 auto;
-            max-width: 100%;
-            overflow-x: auto;
+        .consulta-card {
+            border-radius: 12px;
+            border-left: 6px solid #28a745; /* cor lateral */
+            background: #f5f4f4;
+            padding: 16px;
+            margin-bottom: 16px;
         }
-        .fc-daygrid-day {
-            cursor: pointer;
+        .consulta-data {
+            font-weight: bold;
+            font-size: 1.1rem;
+            color: #28a745;
         }
-        .fc-timegrid-slot {
-            cursor: pointer;
+        .consulta-hora {
+            font-size: 0.95rem;
+            color: #555;
         }
-        .fc-event-main-frame {
-            cursor: pointer;
-        }
-        .fc-daygrid-day:hover {
-            background-color: #f0f8ff;
+        .consulta-info {
+            font-size: 1rem;
         }
     </style>
+
 @endsection
 @section("main")
 <div class="container">
@@ -92,8 +90,76 @@
         </form>
     @endif
 
-    {{-- Calendário --}}
 
+    <div class="container py-4">
+
+        <h3 class="mb-4">Consultas Agendadas</h3>
+
+        <div class="accordion" id="accordionMeses">
+
+            @php
+                use App\Models\AgendamentoModel;
+                $consultas = AgendamentoModel::with(['user', 'servico'])
+                    ->orderBy('data_inicio')
+                    ->get()
+                    ->groupBy(function ($item) {
+                        return \Carbon\Carbon::parse($item->data_inicio)
+                            ->locale('pt_BR')
+                            ->translatedFormat('F Y'); // Ex: "Janeiro 2026"
+                    });
+                $mesAtual = now()->locale('pt_BR')->translatedFormat('F Y');
+            @endphp
+
+            @foreach ($consultas as $mes => $lista)
+
+                @php
+                    $id = Str::slug($mes);
+                    $isOpen = $mes === $mesAtual ? 'show' : '';
+                    $isCollapsed = $mes === $mesAtual ? '' : 'collapsed';
+                @endphp
+
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="heading-{{ $id }}">
+                        <button class="accordion-button {{ $isCollapsed }}" type="button"
+                                data-bs-toggle="collapse"
+                                data-bs-target="#collapse-{{ $id }}">
+                            {{ ucfirst($mes) }}
+                        </button>
+                    </h2>
+
+                    <div id="collapse-{{ $id }}" class="accordion-collapse collapse {{ $isOpen }}"
+                        data-bs-parent="#accordionMeses">
+                        <div class="accordion-body">
+
+                            @forelse ($lista as $consulta)
+                                <div class="consulta-card d-flex">
+                                    <div class="me-3 text-center">
+                                        <div class="consulta-data">
+                                            Dia {{ \Carbon\Carbon::parse($consulta->data_inicio)->format('d') }}
+                                        </div>
+                                        <div class="consulta-hora">
+                                            {{ \Carbon\Carbon::parse($consulta->data_inicio)->format('H:i') }} <br>ás<br> {{ \Carbon\Carbon::parse($consulta->data_fim)->format('H:i') }}
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <strong>Paciente:</strong> {{ $consulta->user->name }}<br>
+                                        <strong>Serviço:</strong> {{ $consulta->servico->descricao }}<br>
+                                    </div>
+                                </div>
+                            @empty
+                                <p class="text-muted">Nenhuma consulta neste mês.</p>
+                            @endforelse
+
+                        </div>
+                    </div>
+                </div>
+
+            @endforeach
+
+        </div>
+
+    </div>
 
 
 </div>

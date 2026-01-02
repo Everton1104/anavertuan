@@ -1,6 +1,7 @@
 @extends('layouts.app')
 @section("title", "Redefinir Senha")
 @section('main')
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
     @if(session('status'))
         <div class="text-success text-center my-5">
                 EMAIL DE REDEFINIÇÃO DE SENHA ENVIADO COM SUCESSO!

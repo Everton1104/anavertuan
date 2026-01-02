@@ -1,6 +1,7 @@
 @extends('layouts.app')
 @section("title", "LOGIN")
 @section('main')
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
     @if (strpos(url()->current(), 'reset-password') == true)
         @if (session('status'))
             <div class="text-success text-center my-5">

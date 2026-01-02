@@ -73,6 +73,16 @@ class RegisteredUserController extends Controller
             'email' => 'required|string|email|max:255',
         ]);
 
+        if($request->has('senha')){
+            if($request['senha'] != $request['senha_confirmation']){
+                return redirect()->back()->with('msgErro', 'Senhas não conferem!');
+            }else{
+                User::find($request['id'])->update([
+                    'password' => Hash::make($request['senha']),
+                ]);
+            }
+        }
+
         if ($validation->fails()) {
             return redirect()->back()->with('msgErro', 'Falha ao atualizar usuário!');
         }

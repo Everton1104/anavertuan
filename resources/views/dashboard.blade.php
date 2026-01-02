@@ -34,6 +34,7 @@
     <div class="my-3">
         <p class="fs-4">Olá, {{ ucfirst(auth()->user()->name) }}</p>
     </div>
+
     {{-- Seção de controle para administradores --}}
     @if(auth()->user()->adm == 1 || auth()->user()->func == 1)
         <div class="card shadow my-3">
@@ -78,6 +79,9 @@
                             @endforeach
                         </tbody>
                     </table>
+                    <div class="d-flex justify-content-end">
+                        {{ $users->links() }}
+                    </div>
                 </div>
             </div>
         </div>
@@ -88,159 +92,30 @@
         </form>
     @endif
 
-    {{-- Calendário LG --}}
-    <div class="card shadow my-3 d-none d-md-block">
-        <div class="card-header">Calendário</div>
-        <div class="card-body">
-            <div class="container-fluid">
-                <div id="calendar-lg" class="w-100"></div>
-            </div>
-        </div>
-    </div>
-    {{-- Calendário SM --}}
-    <div id="calendar-sm" class="my-5 d-md-none"></div>
+    {{-- Calendário --}}
+
+
+
 </div>
 @endsection
 
 @section('scriptEnd')
-    <!-- FullCalendar JS + CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
-
     <script>
-        // Tela LG
-        document.addEventListener('DOMContentLoaded', function () {
-            var calendarEl = document.getElementById('calendar-lg');
-
-            var calendar = new FullCalendar.Calendar(calendarEl, {
-                initialView: 'dayGridMonth',
-                locale: 'pt-br',
-                allDayText: 'dia-todo',
-                headerToolbar: {
-                    left: 'prev,next today',
-                    center: 'title',
-                    right: 'dayGridMonth,timeGridWeek,timeGridDay'
-                },
-                buttonText: {
-                    today: 'Hoje',
-                    month: 'Mês',
-                    week: 'Semana',
-                    day: 'Dia'
-                },
-                dateClick: function(info) {
-                    console.log("DateClick");
-                    console.log(info.dateStr);
-                    console.log(info);
-                },
-                eventClick: function(info) {
-                    console.log("EventClick");
-                    console.log(info.event.title);
-                    console.log(info.event.startStr);
-                    console.log(info.event.endStr);
-                    console.log(info);
-                },
-                events: [
-                    {
-                        title: 'Fulano',
-                        start: '2025-11-05T10:00:00',
-                        end: '2025-11-05T11:00:00'
-                    },
-                    {
-                        title: 'Ciclano',
-                        start: '2025-11-05T11:15:00',
-                        end: '2025-11-05T12:15:00'
-                    },
-                    {
-                        title: 'Zeca',
-                        start: '2025-11-05T11:30:00',
-                        end: '2025-11-05T12:30:00'
-                    },
-                    {
-                        title: 'Beltrano',
-                        start: '2025-11-10T09:30:00',
-                        end: '2025-11-13T18:00:00'
-                    }
-                ]
-            });
-
-            calendar.render();
-        });
-        // Tela SM
-        document.addEventListener('DOMContentLoaded', function () {
-            var calendarEl = document.getElementById('calendar-sm');
-
-            var calendar = new FullCalendar.Calendar(calendarEl, {
-                initialView: 'dayGridMonth',
-                locale: 'pt-br',
-                allDayText: 'dia-todo',
-                headerToolbar: {
-                    left: 'prev,next today',
-                    center: 'title',
-                    right: 'dayGridMonth,timeGridWeek,timeGridDay'
-                },
-                buttonText: {
-                    today: 'Hoje',
-                    month: 'Mês',
-                    week: 'Semana',
-                    day: 'Dia'
-                },
-                dateClick: function(info) {
-                    console.log("DateClick");
-                    console.log(info.dateStr);
-                    console.log(info);
-                },
-                eventClick: function(info) {
-                    console.log("EventClick");
-                    console.log(info.event.title);
-                    console.log(info.event.startStr);
-                    console.log(info.event.endStr);
-                    console.log(info);
-                },
-                events: [
-                    {
-                        title: 'Fulano',
-                        start: '2025-11-05T10:00:00',
-                        end: '2025-11-05T11:00:00'
-                    },
-                    {
-                        title: 'Ciclano',
-                        start: '2025-11-05T11:15:00',
-                        end: '2025-11-05T12:15:00'
-                    },
-                    {
-                        title: 'Beltrano',
-                        start: '2025-11-10T09:00:00',
-                        end: '2025-11-13T18:00:00'
-                    }
-                ]
-            });
-
-            calendar.render();
-        });
         $(document).ready(function () {
-            // Aguarda o calendário renderizar
             setTimeout(function () {
-                if(isSM()){
-                    $('.fc-header-toolbar').addClass('row');
-                    $('.fc-toolbar-chunk').addClass('my-2');
-                    $('.fc').css('font-size', '10px');
-                }
                 @if ($errors->any())
                     $('#modal-add-usuario').modal('show');
                 @endif
             }, 250);
         });
-        function isSM() {
-            return window.matchMedia("(min-width: 768px)").matches ? false : true;
-        }
-        
+
         function excluirUsuario(id, nome) {
             if(confirm("Deseja realmente excluir o usuário "+nome+"?"))
             $('#excluir-usuario-id').val(id);
             $('#form-excluir-usuario').submit();
         }
 
-        let users = JSON.parse('{!! json_encode($users) !!}', true);
+        let users = JSON.parse('{!! json_encode($users->items()) !!}', true);
         function editarUsuario(id) {
             users.forEach(user => {
                 if(user.id == id) {

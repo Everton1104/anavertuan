@@ -13,7 +13,7 @@
     @else
         <div class="min-h-screen flex flex-col sm:justify-center items-center pt-6 sm:pt-0 bg-gray-100">
             <div class="mb-4 text-sm text-gray-600">
-                {{ __('Por favor, insira seu email para que possamos enviar um link de redefinição de senha.') }}
+                {{ __('Por favor, insira seu email para que possamos enviar um link de redefinição/cadastro de senha.') }}
             </div>
             <form method="POST" action="{{ route('password.email') }}">
                 @csrf

@@ -35,14 +35,22 @@
 
     {{-- Seção de controle para administradores --}}
     @if(auth()->user()->adm == 1 || auth()->user()->func == 1)
+        @include('dashboard.modal-add-usuario')
+        @include('dashboard.modal-edt-usuario')
+        @include('dashboard.modal-add-consulta', compact('clientes', 'servicos'))
+        @include('dashboard.modal-add-servico')
         <div class="card shadow my-3">
             <div class="card-header">Controle de Contas de Usuário</div>
             <div class="card-body p-3 row">
                 <div>
                     <button class="btn btn-outline-light" data-bs-toggle="modal" data-bs-target="#modal-add-usuario" style="background-color: var(--marrom)">Novo Usuário</button>
                 </div>
-                @include('dashboard.modal-add-usuario')
-                @include('dashboard.modal-edt-usuario')
+                <div class="input-group my-3">
+                    <span class="input-group-text bg-primary" id="basic-addon1">
+                        <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#ffffff"><path d="M784-120 532-372q-30 24-69 38t-83 14q-109 0-184.5-75.5T120-580q0-109 75.5-184.5T380-840q109 0 184.5 75.5T640-580q0 44-14 83t-38 69l252 252-56 56ZM380-400q75 0 127.5-52.5T560-580q0-75-52.5-127.5T380-760q-75 0-127.5 52.5T200-580q0 75 52.5 127.5T380-400Z"/></svg>
+                    </span>
+                    <input type="search" class="form-control" id="search" placeholder="Pesquisar por nome" aria-label="Pesquisar por nome" aria-describedby="basic-addon1" oninput="searchUsuario()">
+                </div>
                 <div class="table-responsive">
                     <table class="table table-striped table-hover">
                         <thead>
@@ -88,14 +96,34 @@
             @method('post')
             <input type="text" name="id" id="excluir-usuario-id" value="">
         </form>
+
+        <div class="card shadow my-3">
+            <div class="card-header">Serviços</div>
+            <div class="card-body p-3 row">
+                <div>
+                    <button class="btn btn-outline-light" data-bs-toggle="modal" data-bs-target="#modal-add-servico" style="background-color: var(--marrom)">Novo Serviço</button>
+                </div>
+            </div>
+        </div>
     @endif
 
 
     <div class="container py-4">
 
         <h3 class="mb-4">Consultas Agendadas</h3>
+        @if(auth()->user()->adm == 1 || auth()->user()->func == 1)
+            <div class="my-3">
+                <button class="btn btn-outline-light" data-bs-toggle="modal" data-bs-target="#modal-add-consulta" style="background-color: var(--marrom)">Novo Agendamento</button>
+            </div>
+            <div class="input-group my-3">
+                <span class="input-group-text bg-primary" id="basic-addon1">
+                    <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#ffffff"><path d="M400-240v-80h160v80H400ZM240-440v-80h480v80H240ZM120-640v-80h720v80H120Z"/></svg>
+                </span>
+                <input type="search" class="form-control" id="search-consulta" placeholder="Filtrar por paciente" aria-label="Filtrar por paciente" aria-describedby="basic-addon1" oninput="searchConsulta()">
+            </div>
+        @endif
 
-        <div class="accordion" id="accordionMeses">
+        <div class="accordion shadow" id="accordionMeses">
 
             @php
                 use App\Models\AgendamentoModel;
@@ -173,6 +201,9 @@
 
     </div>
 
+    @include('dashboard.calculadora-tmb')
+    @include('dashboard.calculadora-agua')
+
 
 </div>
 @endsection
@@ -181,8 +212,12 @@
     <script>
         $(document).ready(function () {
             setTimeout(function () {
-                @if ($errors->any())
+                // Se houver erros, abre o modal add-usuario
+                @if (isset($errors->toArray()['nome']) || isset($errors->toArray()['email']) || isset($errors->toArray()['senha']))
                     $('#modal-add-usuario').modal('show');
+                @endif
+                @if (false)
+                    $('#modal-add-consulta').modal('show');
                 @endif
             }, 250);
         });

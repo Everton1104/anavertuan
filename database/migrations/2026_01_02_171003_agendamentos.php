@@ -24,6 +24,7 @@ return new class extends Migration
             $table->id();
             $table->string('descricao');
             $table->integer('status')->default(0);
+            $table->time('duracao');
             $table->timestamps();
         });
     }

@@ -83,13 +83,13 @@
             <p class="mb-4 fs-2 sub-titulo">Atendimentos</p>
             <div class="row">
                 <div class="col-md-6 mb-2 m-md-0">
-                    <div class="card shadow-sm p-3">
+                    <div class="card shadow p-3">
                         <h5 class="card-title fs-5">Consultas Individuais</h5>
                         <p class="card-text">Atendimento personalizado com plano alimentar adaptado à sua rotina, objetivos e preferências. Foco em saúde, bem-estar e resultados sustentáveis.</p>
                     </div>
                 </div>
                 <div class="col-md-6 mb-2 m-md-0">
-                    <div class="card shadow-sm p-3">
+                    <div class="card shadow p-3">
                         <h5 class="card-title fs-5">Auriculoterapia</h5>
                         <p class="card-text">Terapia complementar que estimula pontos específicos na orelha para promover equilíbrio físico e emocional, baseada nos princípios da medicina tradicional chinesa.</p>
                     </div>
@@ -97,6 +97,18 @@
             </div>
         </div>
     </section>
+
+    <div class="container">
+        <p class="text-center fs-2 mb-3">Sobre você</p>
+        <div class="mb-5 card shadow p-3">
+            @include('dashboard.calculadora-tmb')
+        </div>
+    
+        <div class="my-5 card shadow p-3">
+            @include('dashboard.calculadora-agua')
+        </div> 
+    </div>
+
 
     <!-- Contato -->
     <section id="contato" class="py-5">
@@ -106,9 +118,4 @@
         <a href="mailto:contato@anavertuan.com.br" class="btn btn-contato btn-outline-light">contato@anavertuan.com.br</a>
         </div>
     </section>
-@endsection
-@section("footer")
-<footer class="bg-dark text-white text-center">
-    <p class="mb-0" style="font-size: 10px">&copy; {{date("Y")}} - Todos os direitos reservados - By EVTU</p>
-</footer>
 @endsection

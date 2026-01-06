@@ -33,6 +33,9 @@
         </main>
         <footer>
             @yield("footer")
+            <footer class="bg-dark text-white text-center" style="bottom:0px;position:fixed;width:100vw;">
+                <p class="mb-0" style="font-size: 10px;">&copy; {{date("Y")}} - Todos os direitos reservados - By <a href="https://evtu.com.br" target="_blank">EVTU</a></p>
+            </footer>
         </footer>
         @yield("scriptEnd")
         <script>

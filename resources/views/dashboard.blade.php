@@ -200,11 +200,6 @@
         </div>
 
     </div>
-
-    @include('dashboard.calculadora-tmb')
-    @include('dashboard.calculadora-agua')
-
-
 </div>
 @endsection
 

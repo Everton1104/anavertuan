@@ -61,7 +61,7 @@ class RegisteredUserController extends Controller
             return redirect()->back()->with('msgErro', 'Falha ao excluir usuário!');
         }
 
-        User::find($request['id'])->delete();
+        User::find($request['id'])->update(['excluido' => 1]);
         return redirect()->back()->with('msg', 'Usuário excluído com sucesso!');
     }
 
@@ -69,16 +69,16 @@ class RegisteredUserController extends Controller
     {
         $validation = Validator::make($request->all(), [
             'id' => 'required|integer',
-            'nome' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255',
+            'nome_edt' => 'required|string|max:255',
+            'email_edt' => 'required|string|email|max:255',
         ]);
 
-        if($request->has('senha')){
-            if($request['senha'] != $request['senha_confirmation']){
+        if($request->has('senha_edt')){
+            if($request['senha_edt'] != $request['senha_confirmation_edt']){
                 return redirect()->back()->with('msgErro', 'Senhas não conferem!');
             }else{
                 User::find($request['id'])->update([
-                    'password' => Hash::make($request['senha']),
+                    'password' => Hash::make($request['senha_edt']),
                 ]);
             }
         }
@@ -88,10 +88,10 @@ class RegisteredUserController extends Controller
         }
 
         User::find($request['id'])->update([
-            'name' => $request['nome'],
-            'email' => $request['email'],
-            'adm' => $request['tipo'] == 'adm' ? 1 : 0,
-            'func' => $request['tipo'] == 'func' ? 1 : 0
+            'name' => $request['nome_edt'],
+            'email' => $request['email_edt'],
+            'adm' => $request['tipo_edt'] == 'adm' ? 1 : 0,
+            'func' => $request['tipo_edt'] == 'func' ? 1 : 0
         ]);
         return redirect()->back()->with('msg', 'Usuário atualizado com sucesso!');
     }

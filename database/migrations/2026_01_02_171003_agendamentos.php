@@ -25,6 +25,7 @@ return new class extends Migration
             $table->string('descricao');
             $table->integer('status')->default(0);
             $table->time('duracao');
+            $table->integer('excluido')->default(0);
             $table->timestamps();
         });
     }

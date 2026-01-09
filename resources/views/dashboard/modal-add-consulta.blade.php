@@ -55,6 +55,7 @@
 
                     <!-- Data da consulta -->
                     <div class="mb-3">
+                        colocar o calendario aqui com os dias disponiveis, depois de selecionado o dia mostrar os horarios disponiveis
                         <label for="data_consulta" class="form-label">Data da Consulta</label>
                         <input type="date" class="form-control" id="data_consulta" name="data_consulta" required>
                     </div>

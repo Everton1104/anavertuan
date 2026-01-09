@@ -14,6 +14,7 @@ return new class extends Migration
         Schema::table('users', function (Blueprint $table) {
             $table->integer('adm')->default(0);
             $table->integer('func')->default(0);
+            $table->integer('excluido')->default(0);
         });
     }
 
@@ -25,6 +26,7 @@ return new class extends Migration
         Schema::table('users', function (Blueprint $table) {
             $table->dropColumn('adm');
             $table->dropColumn('func');
+            $table->dropColumn('excluido');
         });
     }
 };

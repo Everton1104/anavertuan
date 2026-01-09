@@ -9,29 +9,15 @@
                 <form method="POST" id="form-add-servico" action="{{ route('servico.store') }}" novalidate>
                     @csrf
                     @method('post')
-                    <div class="mb-3">
-                        <label for="servico_desc" class="form-label">Nome do Serviço</label>
-                        <input type="text" class="form-control" id="servico_desc" name="descricao" required>
-                    </div>
-                    <div class="mb-3">
-                        <p>Duração do Serviço</p>
-                        <label for="duracao_h" class="form-label">Horas</label>
-                        <select class="form-select" name="duracao_h" id="duracao_h">
-                            <option value="0">00</option>
-                            <option value="1">01</option>
-                            <option value="2">02</option>
-                        </select>
-                        <label for="duracao_m" class="form-label">Minutos</label>
-                        <select class="form-select" name="duracao_m" id="duracao_m">
-                            <option value="00">00</option>
-                            <option value="30">30</option>
-                        </select>
-                    </div>
+                    <x-app.input label="Nome do Serviço" type="text" name="descricao" id="servico_desc" required="true" />
+                    <p class="fs-5 my-2">Duração do Serviço</p>
+                    <x-app.select label="Horas" name="duracao_h" required="true" :options="['00'=>'00', '01'=>'01', '02'=>'02']" />
+                    <x-app.select label="Minutos" name="duracao_m" required="true" :options="['00'=>'00', '30'=>'30']" />
                 </form>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="button" class="btn btn-primary" onclick="$('#form-add-servico').submit()">Atualizar</button>
+                <button type="button" class="btn btn-primary" onclick="$('#form-add-servico').submit()">Adicionar</button>
             </div>
         </div>
     </div>

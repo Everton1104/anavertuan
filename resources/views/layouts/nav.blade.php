@@ -15,7 +15,7 @@
                 <a href="{{url('/')}}/#servicos" class="menu-item-sm">Atendimentos</a>
                 <a href="{{url('/')}}/#contato" class="menu-item-sm">Contato</a>
                 @if(isset(Auth::user()->id))
-                    <a href="dashboard" class="menu-item-sm">Dashboard</a>
+                    <a href="dashboard" class="menu-item-sm">Home</a>
                     <a href="#" class="menu-item-sm" onclick="$('#logout-form').submit()">Sair</a>
                 @else
                     <a class="menu-item-sm" href="{{url('/')}}/login">Login</a>

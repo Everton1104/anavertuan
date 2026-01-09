@@ -35,10 +35,69 @@
 
     {{-- Seção de controle para administradores --}}
     @if(auth()->user()->adm == 1 || auth()->user()->func == 1)
-        @include('dashboard.modal-add-usuario')
-        @include('dashboard.modal-edt-usuario')
+
+
+
+
+
+        {{-- fazer esses modais tbm com <x-tag> --}}
         @include('dashboard.modal-add-consulta', compact('clientes', 'servicos'))
-        @include('dashboard.modal-add-servico')
+
+
+
+
+
+
+        {{-- Modal Adicionar Usuarios --}}
+        <x-app.modal id="modal-add-usuario" title="Adicionar novo usuário" :btn="[['lbl' => 'Adicionar', 'color' => 'primary', 'onclick' => '$(\'#form-add-usuario\').submit()']]">
+            <form method="POST" id="form-add-usuario" action="{{ route('add-usuario') }}" novalidate>
+                @csrf
+                @method('post')
+                <x-app.input label="Nome" type="text" name="nome" id="nome_usuario" required="true" />
+                <x-app.input label="Email" type="text" name="email" id="email_usuario" required="true" />
+                <x-app.input label="Senha" type="password" name="senha" id="senha_usuario" required="true" />
+                <x-app.input label="Confirmar Senha" type="password" name="senha_confirmation" id="senha_confirmation_usuario" required="true" />
+                <x-app.radio name="tipo"
+                    :options="[
+                        'adm' => 'Administrador',
+                        'func' => 'Funcionário',
+                        'cli' => 'Cliente'
+                    ]" 
+                />
+            </form>
+        </x-app.modal>
+
+        {{-- Modal Editar Usuarios --}}
+        <x-app.modal id="modal-edt-usuario" title="Editar usuário" :btn="[['lbl' => 'Atualizar', 'color' => 'success', 'onclick' => '$(\'#form-edt-usuario\').submit()']]">
+            <form method="POST" id="form-edt-usuario" action="{{ route('editar-usuario') }}" novalidate>
+                @csrf
+                @method('post')
+                <x-app.input type="hidden" name="id" id="edt-id" required="true" />
+                <x-app.input label="Nome" type="text" name="nome_edt" id="edt-name" required="true" />
+                <x-app.input label="Email" type="text" name="email_edt" id="edt-email" required="true" />
+                <x-app.input label="Senha" type="password" name="senha_edt" id="senha_usuario_edt" required="true" />
+                <x-app.input label="Confirmar Senha" type="password" name="senha_confirmation_edt" id="senha_confirmation_usuario_edt" required="true" />
+                <x-app.radio name="tipo_edt"
+                    :options="[
+                        'adm' => 'Administrador',
+                        'func' => 'Funcionário',
+                        'cli' => 'Cliente'
+                    ]"
+                />
+            </form>
+        </x-app.modal>
+
+        {{-- Modal Excluir Usuarios --}}
+        <x-app.modal id="modal-exc-usuario" title="Excluir Usuário" :btn="[['lbl' => 'Excluir', 'color' => 'danger', 'onclick' => '$(\'#form-excluir-usuario\').submit()']]">
+            <form id="form-excluir-usuario" action="{{route('delete-usuario')}}" method="post">
+                @csrf
+                @method('post')
+                <p class="fs-3"> Tem certeza que deseja excluir o usuário <span id="excluir-usuario-nome"></span>?</p>
+                <input class="d-none" type="text" name="id" id="excluir-usuario-id" value="">
+            </form>
+        </x-app.modal>
+
+        {{-- Contas de usuário --}}
         <div class="card shadow my-3">
             <div class="card-header">Controle de Contas de Usuário</div>
             <div class="card-body p-3 row">
@@ -91,23 +150,88 @@
                 </div>
             </div>
         </div>
-        <form id="form-excluir-usuario" action="{{route('delete-usuario')}}" method="post" class="d-none">
-            @csrf
-            @method('post')
-            <input type="text" name="id" id="excluir-usuario-id" value="">
-        </form>
 
+        {{-- Modal Serviços --}}
+        <x-app.modal id="modal-add-servico" title="Adicionar Novo Serviço" :btn="[['lbl' => 'Adicionar', 'color' => 'primary', 'onclick' => '$(\'#form-add-servico\').submit()']]">
+            <form method="POST" id="form-add-servico" action="{{ route('servico.store') }}" novalidate>
+                @csrf
+                @method('post')
+                <x-app.input label="Nome do Serviço" type="text" name="descricao" id="servico_desc" required="true" />
+                <p class="fs-5 my-2">Duração do Serviço</p>
+                <x-app.select label="Horas" name="duracao_h" required="true" :options="['00'=>'00', '01'=>'01', '02'=>'02']" />
+                <x-app.select label="Minutos" name="duracao_m" required="true" :options="['00'=>'00', '30'=>'30']" />
+            </form>
+        </x-app.modal>
+
+        {{-- Modal Excluir Serviços --}}
+        <x-app.modal id="modal-exc-servico" title="Excluir Serviço" :btn="[['lbl' => 'Excluir', 'color' => 'danger', 'onclick' => '$(\'#form-excluir-servico\').submit()']]">
+            <form id="form-excluir-servico" action="{{route('delete-servico')}}" method="post">
+                @csrf
+                @method('post')
+                <p class="fs-3"> Tem certeza que deseja excluir o serviço <span id="excluir-servico-nome"></span>?</p>
+                <input class="d-none" type="text" name="excluir-servico-id" id="excluir-servico-id" value="">
+            </form>
+        </x-app.modal>
+
+        {{-- Modal Editar Serviços --}}
+        <x-app.modal id="modal-edt-servico" title="Editar Serviço" :btn="[['lbl' => 'Atualizar', 'color' => 'success', 'onclick' => '$(\'#form-edt-servico\').submit()']]">
+            <form method="POST" id="form-edt-servico" action="{{ route('editar-servico') }}" novalidate>
+                @csrf
+                @method('post')
+                <input type="hidden" name="id_edt_servico" id="id_edt_servico" value="{{ old('id_edt_servico') ?? ''}}">
+                <x-app.input label="Descrição" type="text" name="descricao_edt_servico" required="true" />
+                <p class="fs-5 my-2">Duração do Serviço</p>
+                <x-app.select label="Horas" name="duracao_h_edt_servico" required="true" :options="['00'=>'00', '01'=>'01', '02'=>'02']" />
+                <x-app.select label="Minutos" name="duracao_m_edt_servico" required="true" :options="['00'=>'00', '30'=>'30']" />
+                <x-app.radio name="status_servico"
+                    :options="[
+                        '0' => 'INATIVO',
+                        '1' => 'ATIVO'
+                    ]"
+                />
+            </form>
+        </x-app.modal>
+
+        {{-- Serviços --}}
         <div class="card shadow my-3">
             <div class="card-header">Serviços</div>
             <div class="card-body p-3 row">
                 <div>
                     <button class="btn btn-outline-light" data-bs-toggle="modal" data-bs-target="#modal-add-servico" style="background-color: var(--marrom)">Novo Serviço</button>
                 </div>
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th scope="col">&nbsp;</th>
+                                <th scope="col">Serviço</th>
+                                <th scope="col">Duração</th>
+                                <th scope="col">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach ($servicos as $servico)
+                                <tr>
+                                    <td class="d-flex">
+                                        <svg style="cursor: pointer" onclick="excluirServico({{$servico->id}},'{{$servico->descricao}}')" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#dc3545"><path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z"/></svg>
+                                        <svg style="cursor: pointer" onclick="editarServico('{{$servico->id}}')" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#0d6efd"><path d="M200-200h57l391-391-57-57-391 391v57Zm-80 80v-170l528-527q12-11 26.5-17t30.5-6q16 0 31 6t26 18l55 56q12 11 17.5 26t5.5 30q0 16-5.5 30.5T817-647L290-120H120Zm640-584-56-56 56 56Zm-141 85-28-29 57 57-29-28Z"/></svg>
+                                    </td>
+                                    <td>{{ $servico->descricao }}</td>
+                                    <td>{{ $servico->duracao }}</td>
+                                    <td class="text-{{ $servico->status == 0 ? 'danger' : 'success' }}">{{ $servico->status == 0 ? 'INATIVO' : 'ATIVO' }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                    <div class="d-flex justify-content-end">
+                        {{ $servicos->links() }}
+                    </div>
+                </div>
             </div>
         </div>
     @endif
 
-
+    {{-- Agendametos --}}
     <div class="container py-4">
 
         <h3 class="mb-4">Consultas Agendadas</h3>
@@ -184,7 +308,7 @@
 
                                     <div>
                                         <strong>Paciente:</strong> {{ $consulta->user->name }}<br>
-                                        <strong>Serviço:</strong> {{ $consulta->servico->descricao }}<br>
+                                        <strong>Serviço:</strong> {{ $consulta->servico->descricao ?? '' }}<br>
                                     </div>
                                 </div>
                             @empty
@@ -205,22 +329,12 @@
 
 @section('scriptEnd')
     <script>
-        $(document).ready(function () {
-            setTimeout(function () {
-                // Se houver erros, abre o modal add-usuario
-                @if (isset($errors->toArray()['nome']) || isset($errors->toArray()['email']) || isset($errors->toArray()['senha']))
-                    $('#modal-add-usuario').modal('show');
-                @endif
-                @if (false)
-                    $('#modal-add-consulta').modal('show');
-                @endif
-            }, 250);
-        });
-
         function excluirUsuario(id, nome) {
-            if(confirm("Deseja realmente excluir o usuário "+nome+"?"))
             $('#excluir-usuario-id').val(id);
-            $('#form-excluir-usuario').submit();
+            $('#excluir-usuario-nome').text(nome);
+            setTimeout(() => {
+                $('#modal-exc-usuario').modal('show');
+            }, 250);
         }
 
         let users = JSON.parse('{!! json_encode($users->items()) !!}', true);
@@ -231,12 +345,41 @@
                     $('#edt-name').val(user.name);
                     $('#edt-email').val(user.email);
                     if(user.adm == 1){
-                        $('#edt-adm').prop('checked', true);
+                        $('#tipo_edt_adm').prop('checked', true);
                     }
                     if(user.func == 1){
-                        $('#edt-func').prop('checked', true);
+                        $('#tipo_edt_func').prop('checked', true);
                     }
                     $('#modal-edt-usuario').modal('show');
+                }
+            });
+        }
+
+        function excluirServico(id, nome) {
+            $('#excluir-servico-id').val(id);
+            $('#excluir-servico-nome').text(nome);
+            setTimeout(() => {
+                $('#modal-exc-servico').modal('show');
+            }, 250);
+        }
+
+        let servicos = JSON.parse('{!! json_encode($servicos->items()) !!}', true);
+        function editarServico(id) {
+            servicos.forEach(servico => {
+                if(servico.id == id) {
+                    $('#id_edt_servico').val(id);
+                    $('#descricao_edt_servico').val(servico.descricao);
+                    duracao_h = servico.duracao.split(':')[0];
+                    duracao_m = servico.duracao.split(':')[1];
+                    $('#duracao_h_edt_servico').val(duracao_h.padStart(2, '0'));
+                    $('#duracao_m_edt_servico').val(duracao_m.padStart(2, '0'));
+                    if(servico.status == 0){
+                        $('#status_servico_0').prop('checked', true);
+                    }
+                    if(servico.status == 1){
+                        $('#status_servico_1').prop('checked', true);
+                    }
+                    $('#modal-edt-servico').modal('show');
                 }
             });
         }

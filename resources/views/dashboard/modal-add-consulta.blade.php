@@ -29,7 +29,7 @@
 </style>
 
 
-<div class="modal fade modal-lg" data-bs-backdrop="static" id="modal-add-consulta" tabindex="-1">
+<div class="modal fade modal-lg" data-bs-backdrop="static" id="modal-add-consulta123" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header alert alert-primary">

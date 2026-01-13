@@ -15,6 +15,7 @@
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
         <title>@yield("title") - Nutri Ana Vertuan</title>
         @yield("style")
+        @vite(['resources/js/app.js'])
         @yield("scriptTop")
         <style>
             :root {

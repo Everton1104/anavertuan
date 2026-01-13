@@ -35,19 +35,6 @@
 
     {{-- Seção de controle para administradores --}}
     @if(auth()->user()->adm == 1 || auth()->user()->func == 1)
-
-
-
-
-
-        {{-- fazer esses modais tbm com <x-tag> --}}
-        @include('dashboard.modal-add-consulta', compact('clientes', 'servicos'))
-
-
-
-
-
-
         {{-- Modal Adicionar Usuarios --}}
         <x-app.modal id="modal-add-usuario" title="Adicionar novo usuário" :btn="[['lbl' => 'Adicionar', 'color' => 'primary', 'onclick' => '$(\'#form-add-usuario\').submit()']]">
             <form method="POST" id="form-add-usuario" action="{{ route('add-usuario') }}" novalidate>
@@ -151,7 +138,7 @@
             </div>
         </div>
 
-        {{-- Modal Serviços --}}
+        {{-- Modal Adicionar Serviços --}}
         <x-app.modal id="modal-add-servico" title="Adicionar Novo Serviço" :btn="[['lbl' => 'Adicionar', 'color' => 'primary', 'onclick' => '$(\'#form-add-servico\').submit()']]">
             <form method="POST" id="form-add-servico" action="{{ route('servico.store') }}" novalidate>
                 @csrf
@@ -160,16 +147,6 @@
                 <p class="fs-5 my-2">Duração do Serviço</p>
                 <x-app.select label="Horas" name="duracao_h" required="true" :options="['00'=>'00', '01'=>'01', '02'=>'02']" />
                 <x-app.select label="Minutos" name="duracao_m" required="true" :options="['00'=>'00', '30'=>'30']" />
-            </form>
-        </x-app.modal>
-
-        {{-- Modal Excluir Serviços --}}
-        <x-app.modal id="modal-exc-servico" title="Excluir Serviço" :btn="[['lbl' => 'Excluir', 'color' => 'danger', 'onclick' => '$(\'#form-excluir-servico\').submit()']]">
-            <form id="form-excluir-servico" action="{{route('delete-servico')}}" method="post">
-                @csrf
-                @method('post')
-                <p class="fs-3"> Tem certeza que deseja excluir o serviço <span id="excluir-servico-nome"></span>?</p>
-                <input class="d-none" type="text" name="excluir-servico-id" id="excluir-servico-id" value="">
             </form>
         </x-app.modal>
 
@@ -189,6 +166,16 @@
                         '1' => 'ATIVO'
                     ]"
                 />
+            </form>
+        </x-app.modal>
+
+        {{-- Modal Excluir Serviços --}}
+        <x-app.modal id="modal-exc-servico" title="Excluir Serviço" :btn="[['lbl' => 'Excluir', 'color' => 'danger', 'onclick' => '$(\'#form-excluir-servico\').submit()']]">
+            <form id="form-excluir-servico" action="{{route('delete-servico')}}" method="post">
+                @csrf
+                @method('post')
+                <p class="fs-3"> Tem certeza que deseja excluir o serviço <span id="excluir-servico-nome"></span>?</p>
+                <input class="d-none" type="text" name="excluir-servico-id" id="excluir-servico-id" value="">
             </form>
         </x-app.modal>
 
@@ -223,9 +210,6 @@
                             @endforeach
                         </tbody>
                     </table>
-                    <div class="d-flex justify-content-end">
-                        {{ $servicos->links() }}
-                    </div>
                 </div>
             </div>
         </div>
@@ -236,8 +220,23 @@
 
         <h3 class="mb-4">Consultas Agendadas</h3>
         @if(auth()->user()->adm == 1 || auth()->user()->func == 1)
+            {{-- Modal Adicionar Agendamentos --}}
+            <x-app.modal id="modal-add-agenda" title="Adicionar Nova Consulta" :btn="[['lbl' => 'Adicionar', 'color' => 'primary', 'onclick' => '$(\'#form-add-agenda\').submit()']]">
+                <form method="POST" id="form-add-agenda" action="{{ route('agenda.store') }}" novalidate>
+                    @csrf
+                    @method('post')
+                    <x-app.select label="Cliente" name="user_id" required="true" :options="$clientes->pluck('name', 'id')" />
+                    <x-app.select label="Selecione o serviço" name="servico_id" required="true" :options="$servicos->mapWithKeys(fn($s) => [$s->id => $s->descricao . ' - duração ' . $s->duracao])" />
+                    <input type="hidden" name="data_inicio" id="data_inicio" />
+                    <input type="hidden" name="data_fim" id="data_fim" />
+                    <input type="hidden" id="dia_selecionado" name="dia_selecionado">
+                    <input type="hidden" id="hora_selecionada" name="hora_selecionada" value="{{ old('hora_selecionada') }}">
+                    <input type="hidden" id="agendamento_id" name="agendamento_id">
+                    <x-app.calendar :servicos="$servicos" />
+                </form>
+            </x-app.modal>
             <div class="my-3">
-                <button class="btn btn-outline-light" data-bs-toggle="modal" data-bs-target="#modal-add-consulta" style="background-color: var(--marrom)">Novo Agendamento</button>
+                <button class="btn btn-outline-light" data-bs-toggle="modal" data-bs-target="#modal-add-agenda" style="background-color: var(--marrom)">Novo Agendamento</button>
             </div>
             <div class="input-group my-3">
                 <span class="input-group-text bg-primary" id="basic-addon1">
@@ -296,7 +295,7 @@
                         <div class="accordion-body">
 
                             @forelse ($lista as $consulta)
-                                <div class="consulta-card d-flex">
+                                <div class="consulta-card d-flex" onclick="editarConsulta({{ $consulta->id }})">
                                     <div class="me-3 text-center">
                                         <div class="consulta-data">
                                             Dia {{ \Carbon\Carbon::parse($consulta->data_inicio)->format('d') }}
@@ -329,6 +328,48 @@
 
 @section('scriptEnd')
     <script>
+
+        function editarConsulta(id) {
+            axios.get(`/agenda/${id}/edit`)
+                .then(res => {
+                    const c = res.data;
+
+                    // preencher selects
+                    document.getElementById('user_id').value = c.user_id;
+                    document.getElementById('servico_id').value = c.servico_id;
+
+                    // preencher hidden
+                    document.getElementById('agendamento_id').value = c.id;
+                    document.getElementById('dia_selecionado').value = c.data_inicio.split(' ')[0];
+                    document.getElementById('hora_selecionada').value = c.data_inicio.split(' ')[1];
+                    document.getElementById('data_inicio').value = c.data_inicio;
+                    document.getElementById('data_fim').value = c.data_fim;
+
+                    // abrir modal
+                    var modal = new bootstrap.Modal(document.getElementById('modal-add-agenda'));
+                    modal.show();
+
+                    // gerar calendário
+                    gerarCalendario();
+
+                    // marcar o dia visualmente
+                    setTimeout(() => {
+                        const dia = c.data_inicio.split(' ')[0];
+                        const diaNumero = parseInt(dia.split('-')[2]);
+
+                        document.querySelectorAll(".cal-dia").forEach(d => {
+                            if (parseInt(d.textContent) === diaNumero) {
+                                d.classList.add("cal-selecionado");
+                            }
+                        });
+                    }, 50);
+
+                    // carregar horários
+                    getHoras(c.data_inicio.split(' ')[0]);
+                });
+        }
+
+
         function excluirUsuario(id, nome) {
             $('#excluir-usuario-id').val(id);
             $('#excluir-usuario-nome').text(nome);
@@ -363,7 +404,7 @@
             }, 250);
         }
 
-        let servicos = JSON.parse('{!! json_encode($servicos->items()) !!}', true);
+        let servicos = @json($servicos);
         function editarServico(id) {
             servicos.forEach(servico => {
                 if(servico.id == id) {

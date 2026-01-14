@@ -73,8 +73,6 @@ class AgendaController extends Controller
         return response()->json($horarios);
     }
 
-
-
     public function store(Request $request)
     {
         $request->validate(
@@ -134,6 +132,13 @@ class AgendaController extends Controller
     public function edit($id)
     {
         return AgendamentoModel::findOrFail($id);
+    }
+
+    public function destroy($id)
+    {
+        $consulta = AgendamentoModel::findOrFail($id);
+        $consulta->delete();
+        return response()->json(['ok' => true]);
     }
 
 }

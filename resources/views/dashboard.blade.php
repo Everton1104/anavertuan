@@ -245,7 +245,7 @@
                     <input type="hidden" name="data_fim" id="data_fim" />
                     <input type="hidden" id="dia_selecionado" name="dia_selecionado">
                     <input type="hidden" id="hora_selecionada" name="hora_selecionada" value="{{ old('hora_selecionada') }}">
-                    <input type="text" id="agendamento_id" name="agendamento_id" value="{{old('agendamento_id')}}">AGENDAMENTO
+                    <input type="hidden" id="agendamento_id" name="agendamento_id" value="{{old('agendamento_id')}}">
                     <x-app.calendar :servicos="$servicos" />
                 </form>
             </x-app.modal>
@@ -308,13 +308,16 @@
                         data-bs-parent="#accordionMeses">
                         <div class="accordion-body">
                             @forelse ($lista as $consulta)
-                                <div class="consulta-card d-flex" onclick="editarConsulta({{ $consulta->id }})" style="cursor: pointer">
+                                <div class="consulta-card d-flex justify-content-between align-items-center">
+                                {{-- Área clicável para editar --}}
+                                <div class="d-flex flex-grow-1" @if(auth()->user()->adm == 1 || auth()->user()->func == 1) onclick="editarConsulta({{ $consulta->id }})" style="cursor: pointer" @endif>
                                     <div class="me-3 text-center">
                                         <div class="consulta-data">
                                             Dia {{ \Carbon\Carbon::parse($consulta->data_inicio)->format('d') }}
                                         </div>
                                         <div class="consulta-hora">
-                                            {{ \Carbon\Carbon::parse($consulta->data_inicio)->format('H:i') }} <br>ás<br> {{ \Carbon\Carbon::parse($consulta->data_fim)->format('H:i') }}
+                                            {{ \Carbon\Carbon::parse($consulta->data_inicio)->format('H:i') }} <br>ás<br>
+                                            {{ \Carbon\Carbon::parse($consulta->data_fim)->format('H:i') }}
                                         </div>
                                     </div>
 
@@ -323,6 +326,14 @@
                                         <strong>Serviço:</strong> {{ $consulta->servico->descricao ?? '' }}<br>
                                     </div>
                                 </div>
+                                @if(auth()->user()->adm == 1 || auth()->user()->func == 1)
+                                    {{-- Botão de excluir --}}
+                                    <button class="btn btn-sm btn-danger ms-3"
+                                            onclick="event.stopPropagation(); excluirConsulta({{ $consulta->id }}, '{{ $consulta->servico->descricao ?? '' }}', '{{ $consulta->user->name }}', '{{ \Carbon\Carbon::parse($consulta->data_inicio)->format('H:i') }}', '{{ \Carbon\Carbon::parse($consulta->data_fim)->format('H:i') }}', '{{ \Carbon\Carbon::parse($consulta->data_inicio)->format('d') }}', '{{$mesAtual}}')">
+                                        <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#ffffff"><path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z"/></svg>
+                                    </button>
+                                @endif
+                            </div>
                             @empty
                                 <p class="text-muted">Nenhuma consulta neste mês.</p>
                             @endforelse
@@ -339,101 +350,121 @@
 @endsection
 
 @section('scriptEnd')
-    <script>
-        function editarConsulta(id) {
-            axios.get(`/agenda/${id}/edit`)
-                .then(res => {
-                    const c = res.data;
+    @if(auth()->user()->adm == 1 || auth()->user()->func == 1)
+        <script>
+            function editarConsulta(id) {
+                axios.get(`/agenda/${id}/edit`)
+                    .then(res => {
+                        const c = res.data;
 
-                    // preencher selects
-                    document.getElementById('user_id').value = c.user_id;
-                    document.getElementById('servico_id').value = c.servico_id;
+                        // preencher selects
+                        document.getElementById('user_id').value = c.user_id;
+                        document.getElementById('servico_id').value = c.servico_id;
 
-                    // preencher hidden
-                    document.getElementById('agendamento_id').value = c.id;
-                    document.getElementById('dia_selecionado').value = c.data_inicio.split(' ')[0];
-                    document.getElementById('hora_selecionada').value = c.data_inicio.split(' ')[1];
-                    document.getElementById('data_inicio').value = c.data_inicio;
-                    document.getElementById('data_fim').value = c.data_fim;
+                        // preencher hidden
+                        document.getElementById('agendamento_id').value = c.id;
+                        document.getElementById('dia_selecionado').value = c.data_inicio.split(' ')[0];
+                        document.getElementById('hora_selecionada').value = c.data_inicio.split(' ')[1];
+                        document.getElementById('data_inicio').value = c.data_inicio;
+                        document.getElementById('data_fim').value = c.data_fim;
 
-                    // abrir modal
-                    var modal = new bootstrap.Modal(document.getElementById('modal-add-agenda'));
-                    modal.show();
+                        // abrir modal
+                        var modal = new bootstrap.Modal(document.getElementById('modal-add-agenda'));
+                        modal.show();
 
-                    // gerar calendário
-                    gerarCalendario();
+                        // gerar calendário
+                        gerarCalendario();
 
-                    // marcar o dia visualmente
-                    setTimeout(() => {
-                        const dia = c.data_inicio.split(' ')[0];
-                        const diaNumero = parseInt(dia.split('-')[2]);
+                        // marcar o dia visualmente
+                        setTimeout(() => {
+                            const dia = c.data_inicio.split(' ')[0];
+                            const diaNumero = parseInt(dia.split('-')[2]);
 
-                        document.querySelectorAll(".cal-dia").forEach(d => {
-                            if (parseInt(d.textContent) === diaNumero) {
-                                d.classList.add("cal-selecionado");
-                            }
-                        });
-                    }, 50);
+                            document.querySelectorAll(".cal-dia").forEach(d => {
+                                if (parseInt(d.textContent) === diaNumero) {
+                                    d.classList.add("cal-selecionado");
+                                }
+                            });
+                        }, 50);
 
-                    // carregar horários
-                    getHoras(c.data_inicio.split(' ')[0]);
+                        // carregar horários
+                        getHoras(c.data_inicio.split(' ')[0]);
+                    });
+            }
+
+            function excluirConsulta(id, desc, nome, init, fim, dia, mes) {
+                if (!confirm('Tem certeza que deseja excluir a consulta de '+nome+' com o serviço '+desc+' das '+init+' ás '+fim+' do dia '+dia+' de '+mes+'?')) {
+                    return;
+                }
+
+                axios.delete(`/agenda/${id}`)
+                    .then(res => {
+                        // remover o card da tela
+                        const card = document.querySelector(`button[onclick*="${id}"]`).closest('.consulta-card');
+                        card.remove();
+
+                        // opcional: mensagem de sucesso
+                        alert('Consulta excluída com sucesso');
+                    })
+                    .catch(err => {
+                        alert('Erro ao excluir consulta');
+                    });
+            }
+
+            function excluirUsuario(id, nome) {
+                $('#excluir-usuario-id').val(id);
+                $('#excluir-usuario-nome').text(nome);
+                setTimeout(() => {
+                    $('#modal-exc-usuario').modal('show');
+                }, 250);
+            }
+
+            let users = JSON.parse('{!! json_encode($users->items()) !!}', true);
+            function editarUsuario(id) {
+                users.forEach(user => {
+                    if(user.id == id) {
+                        $('#edt-id').val(id);
+                        $('#edt-name').val(user.name);
+                        $('#edt-email').val(user.email);
+                        if(user.adm == 1){
+                            $('#tipo_edt_adm').prop('checked', true);
+                        }
+                        if(user.func == 1){
+                            $('#tipo_edt_func').prop('checked', true);
+                        }
+                        $('#modal-edt-usuario').modal('show');
+                    }
                 });
-        }
+            }
 
+            function excluirServico(id, nome) {
+                $('#excluir-servico-id').val(id);
+                $('#excluir-servico-nome').text(nome);
+                setTimeout(() => {
+                    $('#modal-exc-servico').modal('show');
+                }, 250);
+            }
 
-        function excluirUsuario(id, nome) {
-            $('#excluir-usuario-id').val(id);
-            $('#excluir-usuario-nome').text(nome);
-            setTimeout(() => {
-                $('#modal-exc-usuario').modal('show');
-            }, 250);
-        }
-
-        let users = JSON.parse('{!! json_encode($users->items()) !!}', true);
-        function editarUsuario(id) {
-            users.forEach(user => {
-                if(user.id == id) {
-                    $('#edt-id').val(id);
-                    $('#edt-name').val(user.name);
-                    $('#edt-email').val(user.email);
-                    if(user.adm == 1){
-                        $('#tipo_edt_adm').prop('checked', true);
+            let servicos = @json($servicos);
+            function editarServico(id) {
+                servicos.forEach(servico => {
+                    if(servico.id == id) {
+                        $('#id_edt_servico').val(id);
+                        $('#descricao_edt_servico').val(servico.descricao);
+                        duracao_h = servico.duracao.split(':')[0];
+                        duracao_m = servico.duracao.split(':')[1];
+                        $('#duracao_h_edt_servico').val(duracao_h.padStart(2, '0'));
+                        $('#duracao_m_edt_servico').val(duracao_m.padStart(2, '0'));
+                        if(servico.status == 0){
+                            $('#status_servico_0').prop('checked', true);
+                        }
+                        if(servico.status == 1){
+                            $('#status_servico_1').prop('checked', true);
+                        }
+                        $('#modal-edt-servico').modal('show');
                     }
-                    if(user.func == 1){
-                        $('#tipo_edt_func').prop('checked', true);
-                    }
-                    $('#modal-edt-usuario').modal('show');
-                }
-            });
-        }
-
-        function excluirServico(id, nome) {
-            $('#excluir-servico-id').val(id);
-            $('#excluir-servico-nome').text(nome);
-            setTimeout(() => {
-                $('#modal-exc-servico').modal('show');
-            }, 250);
-        }
-
-        let servicos = @json($servicos);
-        function editarServico(id) {
-            servicos.forEach(servico => {
-                if(servico.id == id) {
-                    $('#id_edt_servico').val(id);
-                    $('#descricao_edt_servico').val(servico.descricao);
-                    duracao_h = servico.duracao.split(':')[0];
-                    duracao_m = servico.duracao.split(':')[1];
-                    $('#duracao_h_edt_servico').val(duracao_h.padStart(2, '0'));
-                    $('#duracao_m_edt_servico').val(duracao_m.padStart(2, '0'));
-                    if(servico.status == 0){
-                        $('#status_servico_0').prop('checked', true);
-                    }
-                    if(servico.status == 1){
-                        $('#status_servico_1').prop('checked', true);
-                    }
-                    $('#modal-edt-servico').modal('show');
-                }
-            });
-        }
-    </script>
+                });
+            }
+        </script>
+    @endif
 @endsection

@@ -28,7 +28,7 @@
 
 @endsection
 @section("main")
-<div class="container">
+<div class="container mb-5">
     <div class="my-3">
         <p class="fs-4">Olá, {{ ucfirst(auth()->user()->name) }}</p>
     </div>
@@ -86,53 +86,60 @@
 
         {{-- Contas de usuário --}}
         <div class="card shadow my-3">
-            <div class="card-header">Controle de Contas de Usuário</div>
-            <div class="card-body p-3 row">
-                <div>
-                    <button class="btn btn-outline-light" data-bs-toggle="modal" data-bs-target="#modal-add-usuario" style="background-color: var(--marrom)">Novo Usuário</button>
-                </div>
-                <div class="input-group my-3">
-                    <span class="input-group-text bg-primary" id="basic-addon1">
-                        <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#ffffff"><path d="M784-120 532-372q-30 24-69 38t-83 14q-109 0-184.5-75.5T120-580q0-109 75.5-184.5T380-840q109 0 184.5 75.5T640-580q0 44-14 83t-38 69l252 252-56 56ZM380-400q75 0 127.5-52.5T560-580q0-75-52.5-127.5T380-760q-75 0-127.5 52.5T200-580q0 75 52.5 127.5T380-400Z"/></svg>
-                    </span>
-                    <input type="search" class="form-control" id="search" placeholder="Pesquisar por nome" aria-label="Pesquisar por nome" aria-describedby="basic-addon1" oninput="searchUsuario()">
-                </div>
-                <div class="table-responsive">
-                    <table class="table table-striped table-hover">
-                        <thead>
-                            <tr>
-                                <th scope="col">&nbsp;</th>
-                                <th scope="col">Nome</th>
-                                <th scope="col">Email</th>
-                                <th scope="col">Administrador</th>
-                                <th scope="col">Colaborador</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach ($users as $user)
+            <div class="card-header"
+                data-bs-toggle="collapse"
+                data-bs-target="#collapseUsuarios"
+                style="cursor: pointer">
+                Controle de Contas de Usuário
+            </div>
+            <div id="collapseUsuarios" class="collapse">
+                <div class="card-body p-3 row">
+                    <div>
+                        <button class="btn btn-outline-light" data-bs-toggle="modal" data-bs-target="#modal-add-usuario" style="background-color: var(--marrom)">Novo Usuário</button>
+                    </div>
+                    <div class="input-group my-3">
+                        <span class="input-group-text bg-primary" id="basic-addon1">
+                            <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#ffffff"><path d="M784-120 532-372q-30 24-69 38t-83 14q-109 0-184.5-75.5T120-580q0-109 75.5-184.5T380-840q109 0 184.5 75.5T640-580q0 44-14 83t-38 69l252 252-56 56ZM380-400q75 0 127.5-52.5T560-580q0-75-52.5-127.5T380-760q-75 0-127.5 52.5T200-580q0 75 52.5 127.5T380-400Z"/></svg>
+                        </span>
+                        <input type="search" class="form-control" id="search" placeholder="Pesquisar por nome" aria-label="Pesquisar por nome" aria-describedby="basic-addon1" oninput="searchUsuario()">
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead>
                                 <tr>
-                                    @if ($user->adm !=1 || Auth()->user()->id == 1)
-                                        @if ($user->func !=1 || Auth()->user()->adm == 1)
-                                            <td class="d-flex">
-                                                <svg style="cursor: pointer" onclick="excluirUsuario({{$user->id}},'{{$user->name}}')" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#dc3545"><path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z"/></svg>
-                                                <svg style="cursor: pointer" onclick="editarUsuario({{$user->id}})" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#0d6efd"><path d="M200-200h57l391-391-57-57-391 391v57Zm-80 80v-170l528-527q12-11 26.5-17t30.5-6q16 0 31 6t26 18l55 56q12 11 17.5 26t5.5 30q0 16-5.5 30.5T817-647L290-120H120Zm640-584-56-56 56 56Zm-141 85-28-29 57 57-29-28Z"/></svg>
-                                            </td>
-                                        @else
-                                            <td>COLAB</td>
-                                        @endif
-                                    @else
-                                        <td>ADM</td>
-                                    @endif
-                                    <td>{{ $user->name }}</td>
-                                    <td>{{ $user->email }}</td>
-                                    <td>{{ $user->adm > 0 ? 'Sim' : 'Não' }}</td>
-                                    <td>{{ $user->func > 0 ? 'Sim' : 'Não' }}</td>
+                                    <th scope="col">&nbsp;</th>
+                                    <th scope="col">Nome</th>
+                                    <th scope="col">Email</th>
+                                    <th scope="col">Administrador</th>
+                                    <th scope="col">Colaborador</th>
                                 </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
-                    <div class="d-flex justify-content-end">
-                        {{ $users->links() }}
+                            </thead>
+                            <tbody>
+                                @foreach ($users as $user)
+                                    <tr>
+                                        @if ($user->adm !=1 || Auth()->user()->id == 1)
+                                            @if ($user->func !=1 || Auth()->user()->adm == 1)
+                                                <td class="d-flex">
+                                                    <svg style="cursor: pointer" onclick="excluirUsuario({{$user->id}},'{{$user->name}}')" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#dc3545"><path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z"/></svg>
+                                                    <svg style="cursor: pointer" onclick="editarUsuario({{$user->id}})" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#0d6efd"><path d="M200-200h57l391-391-57-57-391 391v57Zm-80 80v-170l528-527q12-11 26.5-17t30.5-6q16 0 31 6t26 18l55 56q12 11 17.5 26t5.5 30q0 16-5.5 30.5T817-647L290-120H120Zm640-584-56-56 56 56Zm-141 85-28-29 57 57-29-28Z"/></svg>
+                                                </td>
+                                            @else
+                                                <td>COLAB</td>
+                                            @endif
+                                        @else
+                                            <td>ADM</td>
+                                        @endif
+                                        <td>{{ $user->name }}</td>
+                                        <td>{{ $user->email }}</td>
+                                        <td>{{ $user->adm > 0 ? 'Sim' : 'Não' }}</td>
+                                        <td>{{ $user->func > 0 ? 'Sim' : 'Não' }}</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                        <div class="d-flex justify-content-end">
+                            {{ $users->links() }}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -181,35 +188,42 @@
 
         {{-- Serviços --}}
         <div class="card shadow my-3">
-            <div class="card-header">Serviços</div>
-            <div class="card-body p-3 row">
-                <div>
-                    <button class="btn btn-outline-light" data-bs-toggle="modal" data-bs-target="#modal-add-servico" style="background-color: var(--marrom)">Novo Serviço</button>
-                </div>
-                <div class="table-responsive">
-                    <table class="table table-striped table-hover">
-                        <thead>
-                            <tr>
-                                <th scope="col">&nbsp;</th>
-                                <th scope="col">Serviço</th>
-                                <th scope="col">Duração</th>
-                                <th scope="col">Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach ($servicos as $servico)
+            <div class="card-header"
+                data-bs-toggle="collapse"
+                data-bs-target="#collapseServicos"
+                style="cursor: pointer">
+                Serviços
+            </div>
+            <div id="collapseServicos" class="collapse">
+                <div class="card-body p-3 row">
+                    <div>
+                        <button class="btn btn-outline-light" data-bs-toggle="modal" data-bs-target="#modal-add-servico" style="background-color: var(--marrom)">Novo Serviço</button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead>
                                 <tr>
-                                    <td class="d-flex">
-                                        <svg style="cursor: pointer" onclick="excluirServico({{$servico->id}},'{{$servico->descricao}}')" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#dc3545"><path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z"/></svg>
-                                        <svg style="cursor: pointer" onclick="editarServico('{{$servico->id}}')" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#0d6efd"><path d="M200-200h57l391-391-57-57-391 391v57Zm-80 80v-170l528-527q12-11 26.5-17t30.5-6q16 0 31 6t26 18l55 56q12 11 17.5 26t5.5 30q0 16-5.5 30.5T817-647L290-120H120Zm640-584-56-56 56 56Zm-141 85-28-29 57 57-29-28Z"/></svg>
-                                    </td>
-                                    <td>{{ $servico->descricao }}</td>
-                                    <td>{{ $servico->duracao }}</td>
-                                    <td class="text-{{ $servico->status == 0 ? 'danger' : 'success' }}">{{ $servico->status == 0 ? 'INATIVO' : 'ATIVO' }}</td>
+                                    <th scope="col">&nbsp;</th>
+                                    <th scope="col">Serviço</th>
+                                    <th scope="col">Duração</th>
+                                    <th scope="col">Status</th>
                                 </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                @foreach ($servicos as $servico)
+                                    <tr>
+                                        <td class="d-flex">
+                                            <svg style="cursor: pointer" onclick="excluirServico({{$servico->id}},'{{$servico->descricao}}')" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#dc3545"><path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z"/></svg>
+                                            <svg style="cursor: pointer" onclick="editarServico('{{$servico->id}}')" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#0d6efd"><path d="M200-200h57l391-391-57-57-391 391v57Zm-80 80v-170l528-527q12-11 26.5-17t30.5-6q16 0 31 6t26 18l55 56q12 11 17.5 26t5.5 30q0 16-5.5 30.5T817-647L290-120H120Zm640-584-56-56 56 56Zm-141 85-28-29 57 57-29-28Z"/></svg>
+                                        </td>
+                                        <td>{{ $servico->descricao }}</td>
+                                        <td>{{ $servico->duracao }}</td>
+                                        <td class="text-{{ $servico->status == 0 ? 'danger' : 'success' }}">{{ $servico->status == 0 ? 'INATIVO' : 'ATIVO' }}</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
@@ -226,17 +240,17 @@
                     @csrf
                     @method('post')
                     <x-app.select label="Cliente" name="user_id" required="true" :options="$clientes->pluck('name', 'id')" />
-                    <x-app.select label="Selecione o serviço" name="servico_id" required="true" :options="$servicos->mapWithKeys(fn($s) => [$s->id => $s->descricao . ' - duração ' . $s->duracao])" />
+                    <x-app.select label="Selecione o serviço" name="servico_id" required="true" :options="$servicos->where('status', 1)->mapWithKeys(fn($s) => [$s->id => $s->descricao . ' - duração ' . $s->duracao])" />
                     <input type="hidden" name="data_inicio" id="data_inicio" />
                     <input type="hidden" name="data_fim" id="data_fim" />
                     <input type="hidden" id="dia_selecionado" name="dia_selecionado">
                     <input type="hidden" id="hora_selecionada" name="hora_selecionada" value="{{ old('hora_selecionada') }}">
-                    <input type="hidden" id="agendamento_id" name="agendamento_id">
+                    <input type="text" id="agendamento_id" name="agendamento_id" value="{{old('agendamento_id')}}">AGENDAMENTO
                     <x-app.calendar :servicos="$servicos" />
                 </form>
             </x-app.modal>
             <div class="my-3">
-                <button class="btn btn-outline-light" data-bs-toggle="modal" data-bs-target="#modal-add-agenda" style="background-color: var(--marrom)">Novo Agendamento</button>
+                <button class="btn btn-outline-light" onclick="$('#agendamento_id').val('')" data-bs-toggle="modal" data-bs-target="#modal-add-agenda" style="background-color: var(--marrom)">Novo Agendamento</button>
             </div>
             <div class="input-group my-3">
                 <span class="input-group-text bg-primary" id="basic-addon1">
@@ -293,9 +307,8 @@
                     <div id="collapse-{{ $id }}" class="accordion-collapse collapse {{ $isOpen }}"
                         data-bs-parent="#accordionMeses">
                         <div class="accordion-body">
-
                             @forelse ($lista as $consulta)
-                                <div class="consulta-card d-flex" onclick="editarConsulta({{ $consulta->id }})">
+                                <div class="consulta-card d-flex" onclick="editarConsulta({{ $consulta->id }})" style="cursor: pointer">
                                     <div class="me-3 text-center">
                                         <div class="consulta-data">
                                             Dia {{ \Carbon\Carbon::parse($consulta->data_inicio)->format('d') }}
@@ -313,7 +326,6 @@
                             @empty
                                 <p class="text-muted">Nenhuma consulta neste mês.</p>
                             @endforelse
-
                         </div>
                     </div>
                 </div>
@@ -328,7 +340,6 @@
 
 @section('scriptEnd')
     <script>
-
         function editarConsulta(id) {
             axios.get(`/agenda/${id}/edit`)
                 .then(res => {

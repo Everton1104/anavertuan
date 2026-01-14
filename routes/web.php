@@ -14,7 +14,7 @@ Route::get('/', function () {
 });
 
 Route::get('/dashboard', function () {
-    $users = User::where('excluido','=','0')->paginate(10);
+    $users = User::where('excluido','=','0')->orderBy('adm', 'desc')->orderBy('func', 'desc')->paginate(10);
     $clientes = User::where([['excluido','=','0'],['func','=','0'],['adm','=','0']])->get(); //clientes
     $servicos = ServicosModel::where('excluido','=','0')->get();
     return view('dashboard', compact('users', 'clientes', 'servicos'));

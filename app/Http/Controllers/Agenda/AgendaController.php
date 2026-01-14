@@ -18,10 +18,7 @@ class AgendaController extends Controller
 
     public function horarios($data)
     {
-        // ID da consulta que está sendo editada (se houver)
-        $ignoreId = request('ignore_id');
-
-        // Buscar consultas do dia, exceto a que está sendo editada
+        $ignoreId = request('ignore_id'); // id da consulta em edição (se houver)
         $consultas = AgendamentoModel::whereDate('data_inicio', $data)
             ->when($ignoreId, fn($q) => $q->where('id', '!=', $ignoreId))
             ->orderBy('data_inicio')
@@ -38,12 +35,11 @@ class AgendaController extends Controller
         $horarios = [];
 
         while ($inicio <= $fim) {
-
             $hora = $inicio->format('H:i');
             $ocupado = false;
             $motivo = null;
 
-            // 1. Verificar se o horário está dentro de alguma consulta existente
+            // 1. Verificar conflito com outras consultas
             foreach ($consultas as $c) {
                 $inicioConsulta = Carbon::parse($c->data_inicio);
                 $fimConsulta = Carbon::parse($c->data_fim);
@@ -55,20 +51,13 @@ class AgendaController extends Controller
                 }
             }
 
-            // 2. Verificar se o serviço cabe até o próximo agendamento
-            if (!$ocupado) {
+            // 2. Verificar se o serviço cabe até o fim do expediente
+            $fimExpediente = $fim;
+            $fimTeorico = $inicio->copy()->addMinutes($duracaoMin);
 
-                $proximaConsulta = AgendamentoModel::where('data_inicio', '>', $inicio)
-                    ->when($ignoreId, fn($q) => $q->where('id', '!=', $ignoreId))
-                    ->orderBy('data_inicio')
-                    ->first();
-
-                $fimTeorico = $inicio->copy()->addMinutes($duracaoMin);
-
-                if ($proximaConsulta && $fimTeorico > $proximaConsulta->data_inicio) {
-                    $ocupado = true;
-                    $motivo = 'Não comporta a duração do serviço';
-                }
+            if (!$ocupado && $fimTeorico > $fimExpediente) {
+                $ocupado = true;
+                $motivo = 'Não comporta a duração do serviço';
             }
 
             // 3. Adicionar ao array final
@@ -107,10 +96,16 @@ class AgendaController extends Controller
         $inicio = Carbon::parse($request->data_inicio);
         $fim = $inicio->copy()->addMinutes($duracao);
 
+        // Se estiver editando, ignorar o próprio agendamento
+        $ignoreId = $request->agendamento_id;
+
+        // Verificar conflito
         $existeConflito = AgendamentoModel::where(function($q) use ($inicio, $fim) {
-            $q->where('data_inicio', '<', $fim)
-            ->where('data_fim', '>', $inicio);
-        })->exists();
+                $q->where('data_inicio', '<', $fim)
+                ->where('data_fim', '>', $inicio);
+            })
+            ->when($ignoreId, fn($q) => $q->where('id', '!=', $ignoreId))
+            ->exists();
 
         if ($existeConflito) {
             return back()
@@ -118,15 +113,23 @@ class AgendaController extends Controller
                 ->withInput();
         }
 
-        AgendamentoModel::create([
-            'user_id' => $request->user_id,
-            'servico_id' => $servico->id,
-            'data_inicio' => $inicio,
-            'data_fim' => $fim,
-        ]);
+        // Se for edição → atualizar
+        if ($ignoreId) {
+            $agendamento = AgendamentoModel::findOrFail($ignoreId);
+        } else {
+            // Se for criação → novo
+            $agendamento = new AgendamentoModel();
+        }
 
-        return redirect()->back()->with('msg', 'Agendamento criado com sucesso');
+        $agendamento->user_id = $request->user_id;
+        $agendamento->servico_id = $servico->id;
+        $agendamento->data_inicio = $inicio;
+        $agendamento->data_fim = $fim;
+        $agendamento->save();
+
+        return redirect()->back()->with('msg', 'Agendamento salvo com sucesso');
     }
+
 
     public function edit($id)
     {

@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules;
 use Illuminate\View\View;
 
@@ -67,10 +68,10 @@ class RegisteredUserController extends Controller
 
     public function editar(Request $request)
     {
-        $validation = Validator::make($request->all(), [
+        $request->validate([
             'id' => 'required|integer',
             'nome_edt' => 'required|string|max:255',
-            'email_edt' => 'required|string|email|max:255',
+            'email_edt' => ['required', 'string', 'lowercase', 'email', 'max:255', Rule::unique('users', 'email')->ignore($request->id)],
         ]);
 
         if($request->has('senha_edt')){
@@ -81,10 +82,6 @@ class RegisteredUserController extends Controller
                     'password' => Hash::make($request['senha_edt']),
                 ]);
             }
-        }
-
-        if ($validation->fails()) {
-            return redirect()->back()->with('msgErro', 'Falha ao atualizar usuário!');
         }
 
         User::find($request['id'])->update([

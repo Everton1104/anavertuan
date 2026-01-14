@@ -103,6 +103,9 @@
 </div>
 
 <script>
+
+    let removeFds = false; // desativar final de semana
+
     document.getElementById('servico_id').addEventListener('change', function () {
 
         // limpar mensagens de erro
@@ -169,7 +172,15 @@
             div.style.cursor = "pointer";
 
             const diaSemana = new Date(ano, mes, d).getDay();
-            if (diaSemana === 0 || diaSemana === 6) div.classList.add("cal-fds");
+            if (diaSemana === 0 || diaSemana === 6) {
+                if(removeFds){ // true desativa finais de semana
+                    div.classList.add("cal-fds", "disabled"); 
+                    grid.appendChild(div);
+                    continue;
+                }else{
+                    div.classList.add("cal-fds");
+                }
+            }
 
             div.onclick = function() {
                 document.getElementById('horarios-erro').textContent = "";

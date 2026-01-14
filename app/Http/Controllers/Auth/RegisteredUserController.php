@@ -93,4 +93,21 @@ class RegisteredUserController extends Controller
         return redirect()->back()->with('msg', 'Usuário atualizado com sucesso!');
     }
 
+    public function search(Request $request)
+    {
+        $q = trim($request->q);
+
+        if ($q === '') {
+            // retorna os primeiros 50 usuários para não pesar
+            $users = User::orderBy('name')->limit(50)->get();
+        } else {
+            $users = User::where('name', 'like', "%{$q}%")
+                ->orWhere('email', 'like', "%{$q}%")
+                ->orderBy('name')
+                ->get();
+        }
+
+        return response()->json($users);
+    }
+
 }

@@ -25,6 +25,7 @@ Route::get('/api/horarios/{data}', [AgendaController::class, 'horarios']);
 Route::post('add-usuario', [RegisteredUserController::class, 'store'])->middleware(['auth', 'verified'])->name('add-usuario');
 Route::post('delete-usuario', [RegisteredUserController::class, 'delete'])->middleware('auth')->name('delete-usuario');
 Route::post('editar-usuario', [RegisteredUserController::class, 'editar'])->middleware('auth')->name('editar-usuario');
+Route::get('/usuarios/search', [RegisteredUserController::class, 'search'])->name('usuarios.search');
 Route::resource('agenda', AgendaController::class)->middleware('auth');
 Route::resource('servico', ServicoController::class)->middleware('auth');
 Route::post('delete-servico', [ServicoController::class, 'delete'])->middleware('auth')->name('delete-servico');

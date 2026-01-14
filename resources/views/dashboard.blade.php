@@ -101,7 +101,7 @@
                         <span class="input-group-text bg-primary" id="basic-addon1">
                             <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#ffffff"><path d="M784-120 532-372q-30 24-69 38t-83 14q-109 0-184.5-75.5T120-580q0-109 75.5-184.5T380-840q109 0 184.5 75.5T640-580q0 44-14 83t-38 69l252 252-56 56ZM380-400q75 0 127.5-52.5T560-580q0-75-52.5-127.5T380-760q-75 0-127.5 52.5T200-580q0 75 52.5 127.5T380-400Z"/></svg>
                         </span>
-                        <input type="search" class="form-control" id="search" placeholder="Pesquisar por nome" aria-label="Pesquisar por nome" aria-describedby="basic-addon1" oninput="searchUsuario()">
+                        <input type="search" class="form-control" id="search" placeholder="Pesquisar por nome" aria-label="Pesquisar" aria-describedby="basic-addon1" oninput="searchUsuario()">
                     </div>
                     <div class="table-responsive">
                         <table class="table table-striped table-hover">
@@ -445,7 +445,7 @@
                 searchTimeout = setTimeout(() => {
                     const termo = document.getElementById('search').value;
 
-                    axios.get('/usuarios/search', {
+                    axios.get('/usuarios-search', {
                         params: { q: termo }
                     })
                     .then(res => {
@@ -455,26 +455,117 @@
             }
 
             function renderTabelaUsuarios(users) {
-            const tbody = document.querySelector("table tbody");
-            tbody.innerHTML = "";
+                const tbody = document.querySelector("table tbody");
+                tbody.innerHTML = "";
 
-            users.forEach(user => {
-                tbody.innerHTML += `
-                    <tr>
-                        <td class="d-flex">
-                            <svg style="cursor: pointer" onclick="excluirUsuario(${user.id}, '${user.name}')" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#dc3545"><path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z"/></svg>
+                users.forEach(user => {
+                    tbody.innerHTML += `
+                        <tr>
+                            <td class="d-flex">
+                                <svg style="cursor: pointer" onclick="excluirUsuario(${user.id}, '${user.name}')" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#dc3545"><path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z"/></svg>
 
-                            <svg style="cursor: pointer" onclick="editarUsuario(${user.id})" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#0d6efd"><path d="M200-200h57l391-391-57-57-391 391v57Zm-80 80v-170l528-527q12-11 26.5-17t30.5-6q16 0 31 6t26 18l55 56q12 11 17.5 26t5.5 30q0 16-5.5 30.5T817-647L290-120H120Zm640-584-56-56 56 56Zm-141 85-28-29 57 57-29-28Z"/></svg>
-                        </td>
+                                <svg style="cursor: pointer" onclick="editarUsuario(${user.id})" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#0d6efd"><path d="M200-200h57l391-391-57-57-391 391v57Zm-80 80v-170l528-527q12-11 26.5-17t30.5-6q16 0 31 6t26 18l55 56q12 11 17.5 26t5.5 30q0 16-5.5 30.5T817-647L290-120H120Zm640-584-56-56 56 56Zm-141 85-28-29 57 57-29-28Z"/></svg>
+                            </td>
 
-                        <td>${user.name}</td>
-                        <td>${user.email}</td>
-                        <td>${user.adm > 0 ? 'Sim' : 'Não'}</td>
-                        <td>${user.func > 0 ? 'Sim' : 'Não'}</td>
-                    </tr>
-                `;
-            });
-        }
+                            <td>${user.name}</td>
+                            <td>${user.email}</td>
+                            <td>${user.adm > 0 ? 'Sim' : 'Não'}</td>
+                            <td>${user.func > 0 ? 'Sim' : 'Não'}</td>
+                        </tr>
+                    `;
+                });
+            }
+
+            let consultaTimeout = null;
+
+            function searchConsulta() {
+                clearTimeout(consultaTimeout);
+
+                consultaTimeout = setTimeout(() => {
+                    const termo = document.getElementById('search-consulta').value;
+
+                    axios.get('/agenda-search', {
+                        params: { q: termo }
+                    })
+                    .then(res => {
+                        renderAccordionConsultas(res.data);
+                    });
+                }, 300);
+            }
+
+            function renderAccordionConsultas(data) {
+                const accordion = document.getElementById('accordionMeses');
+                accordion.innerHTML = "";
+
+                Object.keys(data).forEach(mes => {
+                    const id = mes.toLowerCase().replace(/\s+/g, '-');
+
+                    let html = `
+                        <div class="accordion-item">
+                            <h2 class="accordion-header" id="heading-${id}">
+                                <button class="accordion-button collapsed" type="button"
+                                    data-bs-toggle="collapse"
+                                    data-bs-target="#collapse-${id}">
+                                    ${mes.charAt(0).toUpperCase() + mes.slice(1)}
+                                </button>
+                            </h2>
+
+                            <div id="collapse-${id}" class="accordion-collapse collapse"
+                                data-bs-parent="#accordionMeses">
+                                <div class="accordion-body">
+                    `;
+
+                    data[mes].forEach(c => {
+                        const inicio = c.data_inicio.substring(11,16);
+                        const fim = c.data_fim.substring(11,16);
+                        const dia = c.data_inicio.substring(8,10);
+                        const mesAtual = mes; // já vem do agrupamento
+
+                        html += `
+                            <div class="consulta-card d-flex justify-content-between align-items-center">
+
+                                <div class="d-flex flex-grow-1" onclick="editarConsulta(${c.id})" style="cursor: pointer">
+                                    <div class="me-3 text-center">
+                                        <div class="consulta-data">Dia ${dia}</div>
+                                        <div class="consulta-hora">
+                                            ${inicio} <br>ás<br> ${fim}
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <strong>Paciente:</strong> ${c.user.name}<br>
+                                        <strong>Serviço:</strong> ${c.servico?.descricao ?? ''}
+                                    </div>
+                                </div>
+
+                                <button class="btn btn-sm btn-danger ms-3"
+                                    onclick="event.stopPropagation(); excluirConsulta(
+                                        ${c.id},
+                                        '${c.servico?.descricao ?? ''}',
+                                        '${c.user.name}',
+                                        '${inicio}',
+                                        '${fim}',
+                                        '${dia}',
+                                        '${mesAtual}'
+                                    )">
+                                    <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#ffffff">
+                                        <path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z"/>
+                                    </svg>
+                                </button>
+
+                            </div>
+                        `;
+                    });
+
+                    html += `
+                                </div>
+                            </div>
+                        </div>
+                    `;
+
+                    accordion.innerHTML += html;
+                });
+            }
 
 
             function excluirServico(id, nome) {

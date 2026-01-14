@@ -140,5 +140,23 @@ class AgendaController extends Controller
         $consulta->delete();
         return response()->json(['ok' => true]);
     }
+    
+    public function search(Request $request)
+    {
+        $q = trim($request->q);
 
+        $consultas = AgendamentoModel::with(['user', 'servico'])
+            ->when($q !== '', function ($query) use ($q) {
+                $query->whereHas('user', fn($u) => $u->where('name', 'like', "%{$q}%"));
+            })
+            ->orderBy('data_inicio')
+            ->get()
+            ->groupBy(function ($item) {
+                return \Carbon\Carbon::parse($item->data_inicio)
+                    ->locale('pt_BR')
+                    ->translatedFormat('F Y');
+            });
+
+        return response()->json($consultas);
+    }
 }

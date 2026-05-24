@@ -16,6 +16,9 @@
                 <a href="{{url('/')}}/#contato" class="menu-item-sm">Contato</a>
                 @if(isset(Auth::user()->id))
                     <a href="dashboard" class="menu-item-sm">Home</a>
+                    @if(Auth::user()->adm == 1)
+                        <a href="{{ route('aplicacoes.index') }}" class="menu-item-sm">Aplicações</a>
+                    @endif
                     <a href="#" class="menu-item-sm" onclick="$('#logout-form').submit()">Sair</a>
                 @else
                     <a class="menu-item-sm" href="{{url('/')}}/login">Login</a>
@@ -41,6 +44,11 @@
         <div class="menu-item" onclick="window.location.href='dashboard'">
             Dashboard
         </div>
+        @if(Auth::user()->adm == 1)
+        <div class="menu-item" onclick="window.location.href='{{ route('aplicacoes.index') }}'">
+            Aplicações Mounjaro
+        </div>
+        @endif
         {{-- LOGOUT --}}
         <div class="menu-item menu-bottom" onclick="$('#logout-form').submit()">
             SAIR

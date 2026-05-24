@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Agenda\AgendaController;
 use App\Http\Controllers\Agenda\ServicoController;
+use App\Http\Controllers\AplicacoesController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\WhatsappController;
@@ -126,6 +127,18 @@ Route::middleware('auth')->group(function () {
         WhatsappController::enviarCodigoVerificacao($user);
         return redirect()->route('verificar.whatsapp')->with('status', 'Código enviado!');
     })->name('verificar.whatsapp.reenviar');
+});
+
+// ── Aplicações Mounjaro (somente ADM) ────────────────────────────────────────
+Route::middleware(['auth'])->group(function () {
+    Route::get('/aplicacoes',                          [AplicacoesController::class, 'index'])->name('aplicacoes.index');
+    Route::post('/aplicacoes/fornecedores',            [AplicacoesController::class, 'storeFornecedor'])->name('aplicacoes.fornecedor.store');
+    Route::delete('/aplicacoes/fornecedores/{id}',     [AplicacoesController::class, 'destroyFornecedor'])->name('aplicacoes.fornecedor.destroy');
+    Route::post('/aplicacoes/clientes',                [AplicacoesController::class, 'storeAplicacao'])->name('aplicacoes.store');
+    Route::delete('/aplicacoes/clientes/{id}',         [AplicacoesController::class, 'destroyAplicacao'])->name('aplicacoes.destroy');
+    Route::post('/aplicacoes/clientes/{id}/dose',             [AplicacoesController::class, 'storeDose'])->name('aplicacoes.dose.store');
+    Route::delete('/aplicacoes/doses/{id}',                   [AplicacoesController::class, 'destroyDose'])->name('aplicacoes.dose.destroy');
+    Route::get('/api/aplicacoes/agendamentos/{userId}',       [AplicacoesController::class, 'agendamentosCliente'])->name('aplicacoes.agendamentos');
 });
 
 require __DIR__.'/auth.php';

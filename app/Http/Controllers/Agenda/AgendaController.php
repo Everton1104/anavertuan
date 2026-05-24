@@ -12,20 +12,24 @@ class AgendaController extends Controller
 {
     public function timeToMinutes($time)
     {
-        list($h, $m, $s) = explode(':', $time);
-        return ($h * 60) + $m;
+        $parts = explode(':', $time);
+        return ($parts[0] * 60) + $parts[1];
     }
 
     public function horarios($data)
     {
-        $ignoreId = request('ignore_id'); // id da consulta em edição (se houver)
+        $servico = ServicosModel::find(request('servico_id'));
+
+        if (!$servico) {
+            return response()->json(['error' => 'Serviço não encontrado'], 422);
+        }
+
+        $ignoreId = request('ignore_id');
         $consultas = AgendamentoModel::whereDate('data_inicio', $data)
             ->when($ignoreId, fn($q) => $q->where('id', '!=', $ignoreId))
             ->orderBy('data_inicio')
             ->get();
 
-        // Serviço selecionado
-        $servico = ServicosModel::find(request('servico_id'));
         $duracaoMin = $this->timeToMinutes($servico->duracao);
 
         // Horário de funcionamento
@@ -34,7 +38,7 @@ class AgendaController extends Controller
 
         $horarios = [];
 
-        while ($inicio <= $fim) {
+        while ($inicio < $fim) {
             $hora = $inicio->format('H:i');
             $ocupado = false;
             $motivo = null;
@@ -77,13 +81,17 @@ class AgendaController extends Controller
     {
         $request->validate(
             [
-                'user_id' => ['required'],
-                'servico_id' => ['required'],
-                'data_inicio' => ['required'],
+                'user_id'     => ['required'],
+                'servico_id'  => ['required', 'exists:servicos,id'],
+                'data_inicio' => ['required', 'date', 'after:now'],
             ],
             [
-                'user_id.required' => 'Selecione o cliente.',
-                'servico_id.required' => 'Selecione o serviço.',
+                'user_id.required'      => 'Selecione o cliente.',
+                'servico_id.required'   => 'Selecione o serviço.',
+                'servico_id.exists'     => 'Serviço inválido.',
+                'data_inicio.required'  => 'Selecione um dia e horário.',
+                'data_inicio.date'      => 'Data inválida.',
+                'data_inicio.after'     => 'O agendamento deve ser em uma data futura.',
             ]
         );
 

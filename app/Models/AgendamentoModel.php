@@ -15,7 +15,10 @@ class AgendamentoModel extends Model
         'data_fim',
     ];
 
-    protected $dates = ['data_inicio', 'data_fim'];
+    protected $casts = [
+        'data_inicio' => 'datetime',
+        'data_fim'    => 'datetime',
+    ];
 
     public function servico()
     {

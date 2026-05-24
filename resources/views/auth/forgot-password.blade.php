@@ -1,38 +1,29 @@
-@extends('layouts.app')
-@section("title", "Redefinir Senha")
-@section('main')
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
-    @if(session('status'))
-        <div class="text-success text-center my-5">
-                EMAIL DE REDEFINIÇÃO DE SENHA ENVIADO COM SUCESSO!
+<x-guest-layout>
+    <x-auth-session-status class="mb-4" :status="session('status')" />
+
+    @if(!session('status'))
+        <div class="mb-4 text-sm text-gray-600">
+            Informe seu número de WhatsApp para receber um código de redefinição de senha.
         </div>
-        <script>
-            setTimeout(() => {
-                window.location.href = '/';
-            }, 5000);
-        </script>
-    @else
-        <div class="min-h-screen flex flex-col sm:justify-center items-center pt-6 sm:pt-0 bg-gray-100">
-            <div class="mb-4 text-sm text-gray-600">
-                {{ __('Por favor, insira seu email para que possamos enviar um link de redefinição/cadastro de senha.') }}
+
+        <form method="POST" action="{{ route('password.email') }}">
+            @csrf
+
+            <div>
+                <x-input-label for="whatsapp" :value="'WhatsApp'" />
+                <x-text-input id="whatsapp" class="block mt-1 w-full" type="tel" name="whatsapp"
+                    :value="old('whatsapp')" required autofocus placeholder="Ex: 11987654321" />
+                <x-input-error :messages="$errors->get('whatsapp')" class="mt-2" />
             </div>
-            <form method="POST" action="{{ route('password.email') }}">
-                @csrf
 
-                <!-- Email Address -->
-                <div>
-                    <x-input-label for="email" :value="__('Email')" />
-                    <x-text-input id="email" class="block mt-1 w-full" type="email" name="email" :value="old('email')" required autofocus />
-                    <x-input-error :messages="$errors->get('email')" class="mt-2" />
-                </div>
-
-                <div class="flex items-center justify-end mt-4">
-                    <x-primary-button>
-                        {{ __('ENVIAR LINK DE RECUPERAÇÃO') }}
-                    </x-primary-button>
-                </div>
-            </form>
-        </div>
+            <div class="flex items-center justify-end mt-4">
+                <a class="underline text-sm text-gray-600 hover:text-gray-900 me-auto" href="{{ route('login') }}">
+                    Voltar ao login
+                </a>
+                <x-primary-button>
+                    Enviar código
+                </x-primary-button>
+            </div>
+        </form>
     @endif
-@endsection
-
+</x-guest-layout>

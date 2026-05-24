@@ -41,7 +41,7 @@
                 @csrf
                 @method('post')
                 <x-app.input label="Nome" type="text" name="nome" id="nome_usuario" required="true" />
-                <x-app.input label="Email" type="text" name="email" id="email_usuario" required="true" />
+                <x-app.input label="WhatsApp" type="tel" name="whatsapp" id="whatsapp_usuario" required="true" />
                 <x-app.input label="Senha" type="password" name="senha" id="senha_usuario" required="true" />
                 <x-app.input label="Confirmar Senha" type="password" name="senha_confirmation" id="senha_confirmation_usuario" required="true" />
                 <x-app.radio name="tipo"
@@ -61,7 +61,7 @@
                 @method('post')
                 <x-app.input type="hidden" name="id" id="edt-id" required="true" />
                 <x-app.input label="Nome" type="text" name="nome_edt" id="edt-name" required="true" />
-                <x-app.input label="Email" type="text" name="email_edt" id="edt-email" required="true" />
+                <x-app.input label="WhatsApp" type="tel" name="whatsapp_edt" id="edt-whatsapp" />
                 <x-app.input label="Senha" type="password" name="senha_edt" id="senha_usuario_edt" required="true" />
                 <x-app.input label="Confirmar Senha" type="password" name="senha_confirmation_edt" id="senha_confirmation_usuario_edt" required="true" />
                 <x-app.radio name="tipo_edt"
@@ -109,7 +109,7 @@
                                 <tr>
                                     <th scope="col">&nbsp;</th>
                                     <th scope="col">Nome</th>
-                                    <th scope="col">Email</th>
+                                    <th scope="col">WhatsApp</th>
                                     <th scope="col">Administrador</th>
                                     <th scope="col">Colaborador</th>
                                 </tr>
@@ -130,7 +130,7 @@
                                             <td>ADM</td>
                                         @endif
                                         <td>{{ $user->name }}</td>
-                                        <td>{{ $user->email }}</td>
+                                        <td>{{ $user->whatsapp ?? '—' }}</td>
                                         <td>{{ $user->adm > 0 ? 'Sim' : 'Não' }}</td>
                                         <td>{{ $user->func > 0 ? 'Sim' : 'Não' }}</td>
                                     </tr>
@@ -262,31 +262,7 @@
 
         <div class="accordion shadow" id="accordionMeses">
 
-            @php
-                use App\Models\AgendamentoModel;
-                if(auth()->user()->adm == 1 || auth()->user()->func == 1){
-                    $consultas = AgendamentoModel::with(['user', 'servico'])
-                        ->orderBy('data_inicio')
-                        ->get()
-                        ->groupBy(function ($item) {
-                            return \Carbon\Carbon::parse($item->data_inicio)
-                                ->locale('pt_BR')
-                                ->translatedFormat('F Y'); // Ex: "Janeiro 2026"
-                        });
-                }else{
-                    $consultas = AgendamentoModel::with(['user', 'servico'])
-                        ->where('user_id','=',Auth()->user()->id)
-                        ->orderBy('data_inicio')
-                        ->get()
-                        ->groupBy(function ($item) {
-                            return \Carbon\Carbon::parse($item->data_inicio)
-                                ->locale('pt_BR')
-                                ->translatedFormat('F Y'); // Ex: "Janeiro 2026"
-                        });
-                }
-                $mesAtual = now()->locale('pt_BR')->translatedFormat('F Y');
-            @endphp
-
+    
             @foreach ($consultas as $mes => $lista)
 
                 @php
@@ -425,7 +401,7 @@
                     if(user.id == id) {
                         $('#edt-id').val(id);
                         $('#edt-name').val(user.name);
-                        $('#edt-email').val(user.email);
+                        $('#edt-whatsapp').val(user.whatsapp ?? '');
                         if(user.adm == 1){
                             $('#tipo_edt_adm').prop('checked', true);
                         }
@@ -468,13 +444,16 @@
                             </td>
 
                             <td>${user.name}</td>
-                            <td>${user.email}</td>
+                            <td>${user.whatsapp ?? '—'}</td>
                             <td>${user.adm > 0 ? 'Sim' : 'Não'}</td>
                             <td>${user.func > 0 ? 'Sim' : 'Não'}</td>
                         </tr>
                     `;
                 });
             }
+
+            // Mapa seguro: evita interpolação de dados do usuário em onclick
+            const consultaMap = {};
 
             let consultaTimeout = null;
 
@@ -509,62 +488,50 @@
                                     ${mes.charAt(0).toUpperCase() + mes.slice(1)}
                                 </button>
                             </h2>
-
                             <div id="collapse-${id}" class="accordion-collapse collapse"
                                 data-bs-parent="#accordionMeses">
                                 <div class="accordion-body">
                     `;
 
                     data[mes].forEach(c => {
-                        const inicio = c.data_inicio.substring(11,16);
-                        const fim = c.data_fim.substring(11,16);
-                        const dia = c.data_inicio.substring(8,10);
-                        const mesAtual = mes; // já vem do agrupamento
+                        const inicio = c.data_inicio.substring(11, 16);
+                        const fim    = c.data_fim.substring(11, 16);
+                        const dia    = c.data_inicio.substring(8, 10);
+
+                        // Armazenar dados no mapa — nenhum dado de usuário vai para o onclick
+                        consultaMap[c.id] = { ...c, mes, inicio, fim, dia };
 
                         html += `
                             <div class="consulta-card d-flex justify-content-between align-items-center">
-
                                 <div class="d-flex flex-grow-1" onclick="editarConsulta(${c.id})" style="cursor: pointer">
                                     <div class="me-3 text-center">
                                         <div class="consulta-data">Dia ${dia}</div>
-                                        <div class="consulta-hora">
-                                            ${inicio} <br>ás<br> ${fim}
-                                        </div>
+                                        <div class="consulta-hora">${inicio} <br>ás<br> ${fim}</div>
                                     </div>
-
                                     <div>
-                                        <strong>Paciente:</strong> ${c.user.name}<br>
-                                        <strong>Serviço:</strong> ${c.servico?.descricao ?? ''}
+                                        <strong>Paciente:</strong> ${document.createTextNode(c.user.name).textContent}<br>
+                                        <strong>Serviço:</strong> ${document.createTextNode(c.servico?.descricao ?? '').textContent}
                                     </div>
                                 </div>
-
                                 <button class="btn btn-sm btn-danger ms-3"
-                                    onclick="event.stopPropagation(); excluirConsulta(
-                                        ${c.id},
-                                        '${c.servico?.descricao ?? ''}',
-                                        '${c.user.name}',
-                                        '${inicio}',
-                                        '${fim}',
-                                        '${dia}',
-                                        '${mesAtual}'
-                                    )">
+                                    onclick="event.stopPropagation(); excluirConsultaById(${c.id})">
                                     <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#ffffff">
                                         <path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z"/>
                                     </svg>
                                 </button>
-
                             </div>
                         `;
                     });
 
-                    html += `
-                                </div>
-                            </div>
-                        </div>
-                    `;
-
+                    html += `</div></div></div>`;
                     accordion.innerHTML += html;
                 });
+            }
+
+            function excluirConsultaById(id) {
+                const c = consultaMap[id];
+                if (!c) return;
+                excluirConsulta(id, c.servico?.descricao ?? '', c.user.name, c.inicio, c.fim, c.dia, c.mes);
             }
 
 

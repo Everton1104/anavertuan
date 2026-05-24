@@ -164,24 +164,37 @@
             grid.appendChild(div);
         }
 
+        // Hoje (sem hora) para comparação
+        const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0);
+
         // Dias do mês atual
         for (let d = 1; d <= totalDias; d++) {
             const div = document.createElement("div");
             div.classList.add("cal-dia");
             div.textContent = d;
-            div.style.cursor = "pointer";
 
-            const diaSemana = new Date(ano, mes, d).getDay();
+            const dataDiv = new Date(ano, mes, d);
+            const diaSemana = dataDiv.getDay();
+
+            // Bloquear datas passadas
+            if (dataDiv < hoje) {
+                div.classList.add("disabled");
+                grid.appendChild(div);
+                continue;
+            }
+
             if (diaSemana === 0 || diaSemana === 6) {
-                if(removeFds){ // true desativa finais de semana
-                    div.classList.add("cal-fds", "disabled"); 
+                if (removeFds) {
+                    div.classList.add("cal-fds", "disabled");
                     grid.appendChild(div);
                     continue;
-                }else{
+                } else {
                     div.classList.add("cal-fds");
                 }
             }
 
+            div.style.cursor = "pointer";
             div.onclick = function() {
                 document.getElementById('horarios-erro').textContent = "";
 
@@ -374,16 +387,6 @@
 
     document.addEventListener("DOMContentLoaded", function() {
         gerarCalendario();
-
-        document.getElementById('servico_id').addEventListener('change', function () {
-            // limpar seleção
-            document.getElementById('horarios').innerHTML = "";
-            document.getElementById('dia_selecionado').value = "";
-            document.getElementById('hora_selecionada').value = "";
-            document.getElementById('data_inicio').value = "";
-            document.getElementById('data_fim').value = "";
-        });
-
     });
 </script>
 

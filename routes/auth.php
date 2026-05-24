@@ -4,35 +4,41 @@ use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\ConfirmablePasswordController;
 use App\Http\Controllers\Auth\EmailVerificationNotificationController;
 use App\Http\Controllers\Auth\EmailVerificationPromptController;
-use App\Http\Controllers\Auth\NewPasswordController;
 use App\Http\Controllers\Auth\PasswordController;
-use App\Http\Controllers\Auth\PasswordResetLinkController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\VerifyEmailController;
+use App\Http\Controllers\Auth\WhatsappPasswordResetController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('guest')->group(function () {
-    Route::get('register', [RegisteredUserController::class, 'create'])
-        ->name('register');
-
-    Route::post('register', [RegisteredUserController::class, 'store']);
-
     Route::get('login', [AuthenticatedSessionController::class, 'create'])
         ->name('login');
 
     Route::post('login', [AuthenticatedSessionController::class, 'store']);
 
-    Route::get('forgot-password', [PasswordResetLinkController::class, 'create'])
+    // Passo 1: informar WhatsApp
+    Route::get('forgot-password', [WhatsappPasswordResetController::class, 'create'])
         ->name('password.request');
-
-    Route::post('forgot-password', [PasswordResetLinkController::class, 'store'])
+    Route::post('forgot-password', [WhatsappPasswordResetController::class, 'sendCode'])
         ->name('password.email');
 
-    Route::get('reset-password/{token}', [NewPasswordController::class, 'create'])
-        ->name('password.reset');
+    // Passo 2: digitar código recebido no WhatsApp
+    Route::get('verificar-codigo-senha', [WhatsappPasswordResetController::class, 'showCodeForm'])
+        ->name('password.whatsapp.verify');
+    Route::post('verificar-codigo-senha', [WhatsappPasswordResetController::class, 'verifyCode'])
+        ->name('password.whatsapp.check');
 
-    Route::post('reset-password', [NewPasswordController::class, 'store'])
+    // Passo 3: definir nova senha
+    Route::get('redefinir-senha', [WhatsappPasswordResetController::class, 'showNewPasswordForm'])
+        ->name('password.reset');
+    Route::post('redefinir-senha', [WhatsappPasswordResetController::class, 'updatePassword'])
         ->name('password.store');
+});
+
+// Registro: apenas adm ou funcionário logado
+Route::middleware('auth')->group(function () {
+    Route::get('register', [RegisteredUserController::class, 'create'])->name('register');
+    Route::post('register', [RegisteredUserController::class, 'store']);
 });
 
 Route::middleware('auth')->group(function () {

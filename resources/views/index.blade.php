@@ -22,7 +22,37 @@
         }
 
         .hero {
-            background-color: var(--bege);
+            position: relative;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .hero-video {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            min-width: 100%;
+            min-height: 100%;
+            width: auto;
+            height: auto;
+            transform: translate(-50%, -50%);
+            object-fit: cover;
+            z-index: 0;
+        }
+
+        .hero-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.4);
+            z-index: 1;
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 2;
         }
 
         .btn-agendar {
@@ -46,18 +76,27 @@
     <div class="cover"></div>
 
     <!-- Hero Section -->
-    <header class="hero text-white py-5">
-        <div class="container">
-            <div class="row align-items-center text-center">
+    <header class="hero text-white">
+        <video class="hero-video" autoplay muted loop playsinline id="heroVideo">
+            <source src="{{ Storage::url('hero-anavertuan.mp4') }}" type="video/mp4">
+        </video>
+        <script>
+            document.getElementById('heroVideo').addEventListener('loadedmetadata', function () {
+                this.playbackRate = 0.5;
+            });
+        </script>
+        <div class="hero-overlay"></div>
+        <div class="hero-content container text-center">
+            <div class="row align-items-center justify-content-center">
                 <div class="mb-4 col-12 d-flex justify-content-center">
                     <img src="{{ Storage::url('logo-lg-bege.png') }}?time={{date("His")}}" alt="Nutri Ana Vertuan" class="img-fluid w-50">
                 </div>
                 <div class="mb-4 col-12">
                     <p class="lead">Cuidando da sua saúde e bem-estar através da nutrição</p>
-                </div>    
+                </div>
                 <div class="col-12">
                     <a href="https://wa.me/5511975712377" target="_blank" class="btn btn-agendar btn-outline-light mt-3">Agende sua consulta</a>
-                </div>    
+                </div>
             </div>
         </div>
     </header>

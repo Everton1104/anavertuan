@@ -5,6 +5,7 @@ namespace App\Http\Requests\Auth;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -27,8 +28,30 @@ class LoginRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'email' => ['required', 'string', 'email'],
+            'whatsapp' => ['required', 'string'],
             'password' => ['required', 'string'],
+            'g-recaptcha-response' => [
+                'required',
+                function ($attribute, $value, $fail) {
+                    $secret = env('RECAPTCHA_SECRET_KEY');
+                    if (!$secret) return;
+                    $res = Http::asForm()->post('https://www.google.com/recaptcha/api/siteverify', [
+                        'secret'   => $secret,
+                        'response' => $value,
+                    ])->json();
+                    if (!($res['success'] ?? false)) {
+                        $fail('Confirme que você não é um robô.');
+                    }
+                },
+            ],
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'whatsapp.required'                     => 'Informe seu WhatsApp.',
+            'g-recaptcha-response.required'         => 'Confirme que você não é um robô.',
         ];
     }
 
@@ -41,11 +64,16 @@ class LoginRequest extends FormRequest
     {
         $this->ensureIsNotRateLimited();
 
-        if (! Auth::attempt($this->only('email', 'password'), $this->boolean('remember'))) {
+        $numero = preg_replace('/\D/', '', $this->whatsapp);
+        if (strlen($numero) <= 11) {
+            $numero = '55' . $numero;
+        }
+
+        if (! Auth::attempt(['whatsapp' => $numero, 'password' => $this->password], $this->boolean('remember'))) {
             RateLimiter::hit($this->throttleKey());
 
             throw ValidationException::withMessages([
-                'email' => trans('auth.failed'),
+                'whatsapp' => trans('auth.failed'),
             ]);
         }
 
@@ -80,6 +108,6 @@ class LoginRequest extends FormRequest
      */
     public function throttleKey(): string
     {
-        return Str::transliterate(Str::lower($this->string('email')).'|'.$this->ip());
+        return Str::transliterate(Str::lower($this->string('whatsapp')).'|'.$this->ip());
     }
 }

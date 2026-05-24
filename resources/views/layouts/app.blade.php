@@ -11,6 +11,7 @@
         <link rel="apple-touch-icon" href="/storage/favicon.ico?time={{time()}}">
         <link rel="icon" href="/storage/favicon.ico?time={{time()}}" type="image/x-icon">
         <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
+        <script src="https://cdn.jsdelivr.net/npm/jquery-mask-plugin@1.14.16/dist/jquery.mask.min.js"></script>
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
         <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
         <title>@yield("title") - Nutri Ana Vertuan</title>
@@ -39,6 +40,11 @@
             </footer>
         </footer>
         @yield("scriptEnd")
+        <script>
+            $(function () {
+                $('[name="whatsapp"], [name="whatsapp_edt"]').mask('+55 (00) 00000-0000');
+            });
+        </script>
         <script>
             // Example starter JavaScript for disabling form submissions if there are invalid fields
             (() => {

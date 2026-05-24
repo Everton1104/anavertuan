@@ -25,7 +25,11 @@ class User extends Authenticatable
         'password',
         'adm',
         'func',
-        'excluido'
+        'excluido',
+        'whatsapp',
+        'whatsapp_code',
+        'whatsapp_code_expires_at',
+        'whatsapp_verified_at',
     ];
 
     /**
@@ -46,9 +50,16 @@ class User extends Authenticatable
     protected function casts(): array
     {
         return [
-            'email_verified_at' => 'datetime',
-            'password' => 'hashed',
+            'email_verified_at'        => 'datetime',
+            'password'                 => 'hashed',
+            'whatsapp_code_expires_at' => 'datetime',
+            'whatsapp_verified_at'     => 'datetime',
         ];
+    }
+
+    public function whatsappVerificado(): bool
+    {
+        return $this->whatsapp_verified_at !== null;
     }
 
     public function sendPasswordResetNotification($token)

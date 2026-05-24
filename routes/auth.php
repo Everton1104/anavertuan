@@ -14,7 +14,14 @@ Route::middleware('guest')->group(function () {
     Route::get('login', [AuthenticatedSessionController::class, 'create'])
         ->name('login');
 
-    Route::post('login', [AuthenticatedSessionController::class, 'store']);
+    Route::post('login', [AuthenticatedSessionController::class, 'sendCode']);
+
+    Route::get('login/senha',  [AuthenticatedSessionController::class, 'showSenha'])->name('login.senha');
+    Route::post('login/senha', [AuthenticatedSessionController::class, 'loginComSenha'])->name('login.senha.check');
+
+    Route::get('login/verificar',  [AuthenticatedSessionController::class, 'showVerify'])->name('login.verify');
+    Route::post('login/verificar', [AuthenticatedSessionController::class, 'verify'])->name('login.verify.check');
+    Route::post('login/verificar/reenviar', [AuthenticatedSessionController::class, 'resend'])->name('login.verify.resend');
 
     // Passo 1: informar WhatsApp
     Route::get('forgot-password', [WhatsappPasswordResetController::class, 'create'])

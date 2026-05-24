@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\LembreteConsulta;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 
@@ -13,11 +14,13 @@ class AgendamentoModel extends Model
         'servico_id',
         'data_inicio',
         'data_fim',
+        'confirmado',
     ];
 
     protected $casts = [
         'data_inicio' => 'datetime',
         'data_fim'    => 'datetime',
+        'confirmado'  => 'boolean',
     ];
 
     public function servico()
@@ -28,5 +31,10 @@ class AgendamentoModel extends Model
     public function user()
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function lembretes()
+    {
+        return $this->hasMany(LembreteConsulta::class, 'agendamento_id');
     }
 }

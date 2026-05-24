@@ -6,6 +6,7 @@ use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\WhatsappController;
 use App\Models\AgendamentoModel;
+use App\Models\Aviso;
 use App\Models\ServicosModel;
 use App\Models\User;
 use Illuminate\Support\Facades\Route;
@@ -31,16 +32,25 @@ Route::get('/dashboard', function () {
         fn($item) => \Carbon\Carbon::parse($item->data_inicio)->locale('pt_BR')->translatedFormat('F Y')
     );
 
-    return view('dashboard', compact('users', 'clientes', 'servicos', 'consultas', 'mesAtual'));
+    $avisos = ($user->adm || $user->func)
+        ? Aviso::with(['user', 'servico'])->whereNull('dispensado_at')->latest()->get()
+        : collect();
+
+    return view('dashboard', compact('users', 'clientes', 'servicos', 'consultas', 'mesAtual', 'avisos'));
 })->middleware(['auth', 'verified', 'whatsapp.verified'])->name('dashboard');
 
 Route::get('/api/horarios/{data}', [AgendaController::class, 'horarios']);
+Route::get('/api/dias-disponiveis/{ano}/{mes}', [AgendaController::class, 'diasDisponiveis']);
+Route::get('/api/disponibilidade/{data}', [AgendaController::class, 'getSlotsDia'])->middleware('auth');
+Route::post('/api/disponibilidade/{data}', [AgendaController::class, 'salvarSlots'])->middleware('auth');
 
 Route::post('add-usuario', [RegisteredUserController::class, 'store'])->middleware(['auth', 'verified'])->name('add-usuario');
 Route::post('delete-usuario', [RegisteredUserController::class, 'delete'])->middleware('auth')->name('delete-usuario');
 Route::post('editar-usuario', [RegisteredUserController::class, 'editar'])->middleware('auth')->name('editar-usuario');
-Route::get('usuarios-search', [RegisteredUserController::class, 'search'])->name('usuarios.search');
+Route::get('usuarios-search', [RegisteredUserController::class, 'search'])->middleware('auth')->name('usuarios.search');
 Route::resource('agenda', AgendaController::class)->middleware('auth');
+Route::post('agenda/{id}/confirmar', [AgendaController::class, 'confirmar'])->middleware('auth')->name('agenda.confirmar');
+Route::post('aviso/{id}/dispensar', [AgendaController::class, 'dispensarAviso'])->middleware('auth')->name('aviso.dispensar');
 Route::get('agenda-search', [AgendaController::class, 'search'])->name('agenda.search');
 Route::resource('servico', ServicoController::class)->middleware('auth');
 Route::post('delete-servico', [ServicoController::class, 'delete'])->middleware('auth')->name('delete-servico');
@@ -79,11 +89,13 @@ Route::middleware('auth')->group(function () {
         if ($user->whatsappVerificado()) {
             return redirect()->route('dashboard');
         }
+        $codigoEnviado = !is_null($user->whatsapp_code_expires_at);
         $aguardar = 0;
-        if ($user->whatsapp_code_expires_at) {
-            $aguardar = max(0, $user->whatsapp_code_expires_at->diffInSeconds(now()) - 480);
+        if ($codigoEnviado) {
+            // 60s de cooldown: expires_at é 600s a frente, aguardar = remaining - 540
+            $aguardar = max(0, $user->whatsapp_code_expires_at->diffInSeconds(now()) - 540);
         }
-        return view('auth.verificar-whatsapp', compact('aguardar'));
+        return view('auth.verificar-whatsapp', compact('aguardar', 'codigoEnviado'));
     })->name('verificar.whatsapp');
 
     Route::post('/verificar-whatsapp', function (\Illuminate\Http\Request $req) {
@@ -105,14 +117,14 @@ Route::middleware('auth')->group(function () {
             return redirect()->route('dashboard');
         }
         $aguardar = $user->whatsapp_code_expires_at
-            ? max(0, $user->whatsapp_code_expires_at->diffInSeconds(now()) - 480)
+            ? max(0, $user->whatsapp_code_expires_at->diffInSeconds(now()) - 540)
             : 0;
         if ($aguardar > 0) {
             return redirect()->route('verificar.whatsapp')
                 ->with('error', "Aguarde {$aguardar}s antes de reenviar.");
         }
         WhatsappController::enviarCodigoVerificacao($user);
-        return redirect()->route('verificar.whatsapp')->with('status', 'Código reenviado!');
+        return redirect()->route('verificar.whatsapp')->with('status', 'Código enviado!');
     })->name('verificar.whatsapp.reenviar');
 });
 

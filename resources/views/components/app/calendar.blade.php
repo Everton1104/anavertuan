@@ -1,4 +1,4 @@
-@props(['servicos'])
+@props(['servicos', 'isAdm' => false])
 
 <style>
     #calendario-container {
@@ -40,15 +40,27 @@
 
     .cal-dia.disabled {
         opacity: 0.4;
+        cursor: not-allowed !important;
     }
 
     .cal-fds {
-        background: #dbeafe !important; /* azul claro */
-        color: #1e3a8a !important;      /* azul escuro */
+        background: #dbeafe !important;
+        color: #1e3a8a !important;
+    }
+
+    .cal-disponivel {
+        background: #e9f7ef !important;
+        color: #1e7e34 !important;
+        cursor: pointer;
+    }
+
+    .cal-bloqueado {
+        background: #f8d7da !important;
+        color: #842029 !important;
     }
 
     .cal-selecionado {
-        background: #3e8e41 !important; /* verde escuro */
+        background: #3e8e41 !important;
         color: white !important;
     }
 
@@ -67,8 +79,9 @@
     .hora-ocupado {
         background: #f8d7da;
         color: #842029;
+        opacity: 0.6;
+        cursor: not-allowed;
     }
-
 </style>
 
 
@@ -79,9 +92,8 @@
         <span id="cal-next" role="button">▶</span>
     </div>
     <div class="cal-header" style="justify-content: center; margin-bottom: 10px;">
-        <span id="cal-today" class="btn btn-sm btn-primary ">Hoje</span>
+        <span id="cal-today" class="btn btn-sm btn-primary">Hoje</span>
     </div>
-
 
     <div class="cal-semana">
         <div>Dom</div>
@@ -103,33 +115,36 @@
 </div>
 
 <script>
+    const isAdm = @json($isAdm);
 
-    let removeFds = false; // desativar final de semana
+    let diasDisponiveis = []; // array de números de dia com pelo menos 1 slot disponível
+    let dataAtual = new Date();
+
+    @if(old('dia_selecionado'))
+        dataAtual = new Date("{{ old('dia_selecionado') }}");
+    @endif
 
     document.getElementById('servico_id').addEventListener('change', function () {
-
-        // limpar mensagens de erro
         document.getElementById('horarios-erro').textContent = "";
-
-        // limpar horários
         document.getElementById('horarios').innerHTML = "";
-
-        // limpar seleção visual do calendário
         document.querySelectorAll(".cal-dia").forEach(d => d.classList.remove("cal-selecionado"));
-
-        // limpar inputs hidden
         document.getElementById('dia_selecionado').value = "";
         document.getElementById('hora_selecionada').value = "";
         document.getElementById('data_inicio').value = "";
         document.getElementById('data_fim').value = "";
     });
 
-    let dataAtual = new Date();
-
-    // Se existe old(), ajusta o mês/ano inicial
-    @if(old('dia_selecionado'))
-        dataAtual = new Date("{{ old('dia_selecionado') }}");
-    @endif
+    async function carregarMes() {
+        const ano = dataAtual.getFullYear();
+        const mes = dataAtual.getMonth() + 1;
+        try {
+            const res = await axios.get(`/api/dias-disponiveis/${ano}/${mes}`);
+            diasDisponiveis = res.data;
+        } catch (e) {
+            diasDisponiveis = {};
+        }
+        gerarCalendario();
+    }
 
     function gerarCalendario() {
         const ano = dataAtual.getFullYear();
@@ -140,137 +155,114 @@
             `${nomeMes.charAt(0).toUpperCase() + nomeMes.slice(1)} ${ano}`;
 
         const primeiroDia = new Date(ano, mes, 1);
-        const ultimoDia = new Date(ano, mes + 1, 0);
-
+        const ultimoDia  = new Date(ano, mes + 1, 0);
         const inicioSemana = primeiroDia.getDay();
-        const totalDias = ultimoDia.getDate();
+        const totalDias    = ultimoDia.getDate();
 
         const grid = document.getElementById("cal-dias");
         grid.innerHTML = "";
 
-        // Dias do mês anterior
-        const diasAntes = inicioSemana;
+        // Dias do mês anterior (desabilitados)
         const ultimoDiaMesAnterior = new Date(ano, mes, 0).getDate();
-
-        for (let i = diasAntes - 1; i >= 0; i--) {
+        for (let i = inicioSemana - 1; i >= 0; i--) {
             const dia = ultimoDiaMesAnterior - i;
             const div = document.createElement("div");
             div.classList.add("cal-dia", "disabled");
             div.textContent = dia;
-
-            const diaSemana = new Date(ano, mes - 1, dia).getDay();
-            if (diaSemana === 0 || diaSemana === 6) div.classList.add("cal-fds");
-
+            const ds = new Date(ano, mes - 1, dia).getDay();
+            if (ds === 0 || ds === 6) div.classList.add("cal-fds");
             grid.appendChild(div);
         }
 
-        // Hoje (sem hora) para comparação
         const hoje = new Date();
         hoje.setHours(0, 0, 0, 0);
 
-        // Dias do mês atual
         for (let d = 1; d <= totalDias; d++) {
             const div = document.createElement("div");
             div.classList.add("cal-dia");
             div.textContent = d;
 
-            const dataDiv = new Date(ano, mes, d);
+            const dataDiv   = new Date(ano, mes, d);
             const diaSemana = dataDiv.getDay();
 
-            // Bloquear datas passadas
             if (dataDiv < hoje) {
                 div.classList.add("disabled");
+                if (diaSemana === 0 || diaSemana === 6) div.classList.add("cal-fds");
                 grid.appendChild(div);
                 continue;
             }
 
-            if (diaSemana === 0 || diaSemana === 6) {
-                if (removeFds) {
-                    div.classList.add("cal-fds", "disabled");
-                    grid.appendChild(div);
-                    continue;
-                } else {
-                    div.classList.add("cal-fds");
-                }
+            if (diaSemana === 0 || diaSemana === 6) div.classList.add("cal-fds");
+
+            // Verificar disponibilidade
+            if (diasDisponiveis.includes(d)) {
+                div.classList.add("cal-disponivel");
+                div.onclick = function () {
+                    document.getElementById('horarios-erro').textContent = "";
+                    document.querySelectorAll(".cal-dia").forEach(el => el.classList.remove("cal-selecionado"));
+                    div.classList.add("cal-selecionado");
+
+                    const mesFormatado = String(mes + 1).padStart(2, '0');
+                    const diaFormatado = String(d).padStart(2, '0');
+                    const dataCompleta = `${ano}-${mesFormatado}-${diaFormatado}`;
+
+                    document.getElementById('dia_selecionado').value = dataCompleta;
+                    getHoras(dataCompleta);
+                };
+            } else {
+                div.classList.add("cal-bloqueado", "disabled");
+                div.title = "Dia não disponível";
             }
-
-            div.style.cursor = "pointer";
-            div.onclick = function() {
-                document.getElementById('horarios-erro').textContent = "";
-
-                document.querySelectorAll(".cal-dia").forEach(d => d.classList.remove("cal-selecionado"));
-                div.classList.add("cal-selecionado");
-
-                const mesFormatado = String(mes + 1).padStart(2, '0');
-                const diaFormatado = String(d).padStart(2, '0');
-                const dataCompleta = `${ano}-${mesFormatado}-${diaFormatado}`;
-
-                document.getElementById('dia_selecionado').value = dataCompleta;
-
-                getHoras(dataCompleta);
-            };
 
             grid.appendChild(div);
         }
 
-        // Dias do próximo mês
-        const totalCelulas = diasAntes + totalDias;
+        // Dias do próximo mês (desabilitados)
+        const totalCelulas = inicioSemana + totalDias;
         const resto = totalCelulas % 7;
-
         if (resto !== 0) {
-            const diasProx = 7 - resto;
-
-            for (let d = 1; d <= diasProx; d++) {
+            for (let d = 1; d <= 7 - resto; d++) {
                 const div = document.createElement("div");
                 div.classList.add("cal-dia", "disabled");
                 div.textContent = d;
-
-                const diaSemana = new Date(ano, mes + 1, d).getDay();
-                if (diaSemana === 0 || diaSemana === 6) div.classList.add("cal-fds");
-
+                const ds = new Date(ano, mes + 1, d).getDay();
+                if (ds === 0 || ds === 6) div.classList.add("cal-fds");
                 grid.appendChild(div);
             }
         }
 
-        // Restaurar seleção do dia
+        // Restaurar seleção do dia após erro de validação
         @if(old('dia_selecionado'))
             const oldDate = "{{ old('dia_selecionado') }}";
             const [anoOld, mesOld, diaOld] = oldDate.split('-');
-
             if (anoOld == dataAtual.getFullYear() && mesOld == String(dataAtual.getMonth() + 1).padStart(2, '0')) {
                 document.querySelectorAll('.cal-dia').forEach(div => {
-                    if (div.textContent == Number(diaOld)) {
-
-                        // marcar visualmente
+                    if (parseInt(div.textContent) === Number(diaOld) && !div.classList.contains('disabled')) {
                         div.classList.add('cal-selecionado');
-
-                        // preencher o hidden (🔥 ESSENCIAL)
                         document.getElementById('dia_selecionado').value = oldDate;
                     }
                 });
             }
         @endif
-
     }
 
-    // Navegação
     document.getElementById("cal-prev").addEventListener("click", () => {
         dataAtual.setMonth(dataAtual.getMonth() - 1);
-        gerarCalendario();
+        carregarMes();
     });
 
     document.getElementById("cal-next").addEventListener("click", () => {
         dataAtual.setMonth(dataAtual.getMonth() + 1);
-        gerarCalendario();
+        carregarMes();
     });
 
     document.getElementById("cal-today").addEventListener("click", () => {
         dataAtual = new Date();
-        gerarCalendario();
+        carregarMes();
     });
 
     function getHoras(data) {
-        let servico_id = document.getElementById('servico_id').value;
+        const servico_id = document.getElementById('servico_id').value;
 
         if (!servico_id) {
             document.getElementById('servico_id').classList.add('is-invalid');
@@ -281,23 +273,29 @@
         document.getElementById('servico_id').classList.remove('is-invalid');
         document.getElementById('horarios').innerHTML = "<p>Carregando...</p>";
 
-        axios.get('/api/horarios/' + data, { params: { 
-            servico_id,
-            ignore_id: document.getElementById('agendamento_id')?.value ?? null
-        } })
-            .then(response => mostrarHorarios(response.data))
-            .catch(() => {
-                document.getElementById('horarios').innerHTML = "<p>Falha ao carregar os horários</p>";
-            });
+        axios.get('/api/horarios/' + data, {
+            params: {
+                servico_id,
+                ignore_id: document.getElementById('agendamento_id')?.value ?? null,
+            }
+        })
+        .then(response => mostrarHorarios(response.data))
+        .catch(() => {
+            document.getElementById('horarios').innerHTML = "<p>Falha ao carregar os horários</p>";
+        });
     }
 
     function mostrarHorarios(lista) {
         const container = document.getElementById('horarios');
         container.innerHTML = "";
 
-        // Recuperar valores antigos (caso tenha erro de validação)
+        if (!lista || lista.length === 0) {
+            container.innerHTML = "<p class='text-muted'>Nenhum horário disponível neste dia.</p>";
+            return;
+        }
+
         const horaSelecionadaOld = "{{ old('hora_selecionada') }}";
-        const diaSelecionadoOld = "{{ old('dia_selecionado') }}";
+        const diaSelecionadoOld  = "{{ old('dia_selecionado') }}";
 
         lista.forEach(item => {
             const div = document.createElement("div");
@@ -305,61 +303,39 @@
 
             if (item.ocupado) {
                 div.classList.add("hora-ocupado");
-                div.textContent = item.hora + " — " + (item.motivo ?? "Indisponível");
-                div.style.opacity = "0.6";
-                div.style.cursor = "not-allowed";
+                // Clientes veem apenas "Indisponível"; adm/func veem o motivo
+                const label = isAdm ? (item.motivo ?? 'Indisponível') : 'Indisponível';
+                div.textContent = item.hora + " — " + label;
             } else {
                 div.classList.add("hora-livre");
                 div.textContent = item.hora + " — Disponível";
                 div.style.cursor = "pointer";
 
-                // Clique no horário
-                div.onclick = function() {
-
-                    if (item.ocupado) return; //impede clique em horários inválidos
-
-                    // limpar erro
+                div.onclick = function () {
                     document.getElementById('horarios-erro').textContent = "";
-
-                    // remover seleção anterior
                     document.querySelectorAll(".hora-item").forEach(h => h.classList.remove("cal-selecionado"));
                     div.classList.add("cal-selecionado");
 
-                    // salvar hora selecionada
                     document.getElementById('hora_selecionada').value = item.hora;
-
-                    // pegar o dia selecionado
                     const dataSelecionada = document.getElementById('dia_selecionado').value;
-
-                    // montar data_inicio
                     const dataInicio = `${dataSelecionada} ${item.hora}`;
                     document.getElementById('data_inicio').value = dataInicio;
-
-                    // calcular data_fim baseado no serviço
                     calcularDataFim(dataInicio);
                 };
             }
 
-            // 🔥 Restaurar seleção após erro
+            // Restaurar seleção após erro de validação
             if (horaSelecionadaOld && item.hora === horaSelecionadaOld) {
                 div.classList.add("cal-selecionado");
-
-                // reconstruir data_inicio
-                const dataSelecionada = diaSelecionadoOld;
-                const dataInicio = `${dataSelecionada} ${item.hora}`;
-
-                // preencher inputs hidden
+                const dataInicio = `${diaSelecionadoOld} ${item.hora}`;
                 document.getElementById('hora_selecionada').value = item.hora;
                 document.getElementById('data_inicio').value = dataInicio;
-
-                // calcular data_fim
                 calcularDataFim(dataInicio);
             }
 
             container.appendChild(div);
         });
     }
-
 
     function calcularDataFim(dataInicio) {
         const servico_id = document.getElementById('servico_id').value;
@@ -374,25 +350,28 @@
 
         const fim = new Date(inicio.getTime() + minutos * 60000);
 
-        const ano = fim.getFullYear();
-        const mes = String(fim.getMonth() + 1).padStart(2, '0');
-        const dia = String(fim.getDate()).padStart(2, '0');
-        const hora = String(fim.getHours()).padStart(2, '0');
-        const min = String(fim.getMinutes()).padStart(2, '0');
-
-        document.getElementById('data_fim').value = `${ano}-${mes}-${dia} ${hora}:${min}`;
+        const pad = n => String(n).padStart(2, '0');
+        document.getElementById('data_fim').value =
+            `${fim.getFullYear()}-${pad(fim.getMonth() + 1)}-${pad(fim.getDate())} ${pad(fim.getHours())}:${pad(fim.getMinutes())}`;
     }
 
     const SERVICOS = @json($servicos);
 
-    document.addEventListener("DOMContentLoaded", function() {
-        gerarCalendario();
+    document.addEventListener("DOMContentLoaded", function () {
+        carregarMes();
+
+        @if(old('dia_selecionado') && old('hora_selecionada'))
+            carregarMes().then(() => {
+                const dia = "{{ old('dia_selecionado') }}";
+                getHoras(dia);
+            });
+        @endif
     });
 </script>
 
 @error('data_inicio')
     <script>
-        document.addEventListener("DOMContentLoaded", function() {
+        document.addEventListener("DOMContentLoaded", function () {
             document.getElementById('horarios-erro').textContent = "{{ $message }}";
         });
     </script>

@@ -104,13 +104,20 @@ class RegisteredUserController extends Controller
 
     public function search(Request $request)
     {
-        $q = trim($request->q);
+        abort_unless(auth()->user()->adm || auth()->user()->func, 403);
+
+        $q      = trim($request->q);
+        $campos = ['id', 'name', 'whatsapp', 'adm', 'func'];
 
         if ($q === '') {
-            $users = User::orderBy('name')->limit(50)->get();
+            $users = User::select($campos)->where('excluido', 0)->orderBy('name')->limit(50)->get();
         } else {
-            $users = User::where('name', 'like', "%{$q}%")
-                ->orWhere('whatsapp', 'like', "%{$q}%")
+            $users = User::select($campos)
+                ->where('excluido', 0)
+                ->where(function ($query) use ($q) {
+                    $query->where('name', 'like', "%{$q}%")
+                          ->orWhere('whatsapp', 'like', "%{$q}%");
+                })
                 ->orderBy('name')
                 ->get();
         }

@@ -431,7 +431,7 @@
         </div>
 
         <div class="accordion shadow" id="accordionMeses">
-            @foreach ($consultas as $mes => $lista)
+            @foreach ($consultas as $mes => $diasDoMes)
                 @php
                     $id = Str::slug($mes);
                     $isOpen = $mes === $mesAtual ? 'show' : '';
@@ -448,60 +448,73 @@
                     <div id="collapse-{{ $id }}" class="accordion-collapse collapse {{ $isOpen }}"
                         data-bs-parent="#accordionMeses">
                         <div class="accordion-body">
-                            @forelse ($lista as $consulta)
-                                @php $isStaff = auth()->user()->adm == 1 || auth()->user()->func == 1; @endphp
-                                <div class="consulta-card {{ !$consulta->confirmado ? 'consulta-pendente' : '' }} d-flex {{ $isStaff ? 'justify-content-between align-items-center' : 'flex-column' }}" data-consulta-id="{{ $consulta->id }}">
-                                    <div class="d-flex flex-grow-1" @if($isStaff) onclick="editarConsulta({{ $consulta->id }})" style="cursor: pointer" @endif>
-                                        <div class="me-3 text-center">
-                                            <div class="consulta-data">
-                                                Dia {{ \Carbon\Carbon::parse($consulta->data_inicio)->format('d') }}
-                                            </div>
-                                            <div class="consulta-hora">
-                                                {{ \Carbon\Carbon::parse($consulta->data_inicio)->format('H:i') }} <br>às<br>
-                                                {{ \Carbon\Carbon::parse($consulta->data_fim)->format('H:i') }}
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <strong>Paciente:</strong> {{ $consulta->user->name }}<br>
-                                            <strong>Serviço:</strong> {{ $consulta->servico->descricao ?? '' }}<br>
-                                            @if(!$consulta->confirmado)
+                            @forelse ($diasDoMes as $dataKey => $listaDia)
+                                @php
+                                    $isHoje   = $dataKey === $hoje;
+                                    $diaLabel = \Carbon\Carbon::parse($dataKey)->locale('pt_BR')->translatedFormat('l, d \d\e F');
+                                @endphp
+                                <div class="mb-2">
+                                    <button class="btn btn-sm w-100 text-start d-flex align-items-center gap-2 {{ $isHoje ? 'btn-primary' : 'btn-outline-secondary' }}"
+                                            data-bs-toggle="collapse"
+                                            data-bs-target="#dia-{{ $dataKey }}">
+                                        <span>{{ ucfirst($diaLabel) }}</span>
+                                        <span class="badge {{ $isHoje ? 'bg-light text-dark' : 'bg-secondary' }} ms-auto">{{ $listaDia->count() }}</span>
+                                    </button>
+                                    <div id="dia-{{ $dataKey }}" class="collapse {{ $isHoje ? 'show' : '' }} pt-2">
+                                        @foreach ($listaDia as $consulta)
+                                            @php $isStaff = auth()->user()->adm == 1 || auth()->user()->func == 1; @endphp
+                                            <div class="consulta-card {{ !$consulta->confirmado ? 'consulta-pendente' : '' }} d-flex {{ $isStaff ? 'justify-content-between align-items-center' : 'flex-column' }}" data-consulta-id="{{ $consulta->id }}">
+                                                <div class="d-flex flex-grow-1" @if($isStaff) onclick="editarConsulta({{ $consulta->id }})" style="cursor: pointer" @endif>
+                                                    <div class="me-3 text-center">
+                                                        <div class="consulta-hora">
+                                                            {{ \Carbon\Carbon::parse($consulta->data_inicio)->format('H:i') }} <br>às<br>
+                                                            {{ \Carbon\Carbon::parse($consulta->data_fim)->format('H:i') }}
+                                                        </div>
+                                                    </div>
+                                                    <div>
+                                                        <strong>Paciente:</strong> {{ $consulta->user->name }}<br>
+                                                        <strong>Serviço:</strong> {{ $consulta->servico->descricao ?? '' }}<br>
+                                                        @if(!$consulta->confirmado)
+                                                            @if($isStaff)
+                                                                <span class="badge bg-warning text-dark mt-1">Pendente confirmação</span>
+                                                            @else
+                                                                <span class="badge bg-info text-dark mt-1">Aguardando confirmação</span>
+                                                            @endif
+                                                        @endif
+                                                    </div>
+                                                </div>
                                                 @if($isStaff)
-                                                    <span class="badge bg-warning text-dark mt-1">Pendente confirmação</span>
-                                                @else
-                                                    <span class="badge bg-info text-dark mt-1">Aguardando confirmação</span>
+                                                    @if(!$consulta->confirmado)
+                                                        <button class="btn btn-sm btn-success btn-confirmar ms-2"
+                                                                onclick="event.stopPropagation(); confirmarConsulta({{ $consulta->id }})">
+                                                            Confirmar
+                                                        </button>
+                                                    @endif
+                                                    <button class="btn btn-sm btn-danger ms-2"
+                                                            onclick="event.stopPropagation(); excluirConsultaById({{ $consulta->id }})">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#ffffff"><path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z"/></svg>
+                                                    </button>
+                                                @elseif($consulta->data_inicio->isFuture())
+                                                    <div class="d-flex gap-2 mt-3">
+                                                        <button class="btn btn-sm btn-outline-primary"
+                                                                data-id="{{ $consulta->id }}"
+                                                                data-servico-id="{{ $consulta->servico_id }}"
+                                                                data-servico-nome="{{ $consulta->servico->descricao ?? '' }}"
+                                                                onclick="reagendarConsulta(this.dataset.id, this.dataset.servicoId, this.dataset.servicoNome)">
+                                                            Reagendar
+                                                        </button>
+                                                        <button class="btn btn-sm btn-outline-danger"
+                                                                data-id="{{ $consulta->id }}"
+                                                                data-servico-id="{{ $consulta->servico_id }}"
+                                                                data-servico-nome="{{ $consulta->servico->descricao ?? '' }}"
+                                                                onclick="cancelarConsulta(this.dataset.id, this.dataset.servicoId, this.dataset.servicoNome)">
+                                                            Cancelar
+                                                        </button>
+                                                    </div>
                                                 @endif
-                                            @endif
-                                        </div>
+                                            </div>
+                                        @endforeach
                                     </div>
-                                    @if($isStaff)
-                                        @if(!$consulta->confirmado)
-                                            <button class="btn btn-sm btn-success btn-confirmar ms-2"
-                                                    onclick="event.stopPropagation(); confirmarConsulta({{ $consulta->id }})">
-                                                Confirmar
-                                            </button>
-                                        @endif
-                                        <button class="btn btn-sm btn-danger ms-2"
-                                                onclick="event.stopPropagation(); excluirConsultaById({{ $consulta->id }})">
-                                            <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#ffffff"><path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z"/></svg>
-                                        </button>
-                                    @elseif($consulta->data_inicio->isFuture())
-                                        <div class="d-flex gap-2 mt-3">
-                                            <button class="btn btn-sm btn-outline-primary"
-                                                    data-id="{{ $consulta->id }}"
-                                                    data-servico-id="{{ $consulta->servico_id }}"
-                                                    data-servico-nome="{{ $consulta->servico->descricao ?? '' }}"
-                                                    onclick="reagendarConsulta(this.dataset.id, this.dataset.servicoId, this.dataset.servicoNome)">
-                                                Reagendar
-                                            </button>
-                                            <button class="btn btn-sm btn-outline-danger"
-                                                    data-id="{{ $consulta->id }}"
-                                                    data-servico-id="{{ $consulta->servico_id }}"
-                                                    data-servico-nome="{{ $consulta->servico->descricao ?? '' }}"
-                                                    onclick="cancelarConsulta(this.dataset.id, this.dataset.servicoId, this.dataset.servicoNome)">
-                                                Cancelar
-                                            </button>
-                                        </div>
-                                    @endif
                                 </div>
                             @empty
                                 <p class="text-muted">Nenhuma consulta neste mês.</p>
@@ -693,19 +706,21 @@
         }
 
         let searchUsuarioTimeout = null;
-        function searchUsuario() {
+        let searchUsuarioTermoAtual = '';
+
+        function searchUsuario(page = 1) {
             clearTimeout(searchUsuarioTimeout);
+            searchUsuarioTermoAtual = document.getElementById('search').value;
             searchUsuarioTimeout = setTimeout(() => {
-                const termo = document.getElementById('search').value;
-                axios.get('/usuarios-search', { params: { q: termo } })
+                axios.get('/usuarios-search', { params: { q: searchUsuarioTermoAtual, page } })
                     .then(res => renderTabelaUsuarios(res.data));
-            }, 300);
+            }, page === 1 ? 300 : 0);
         }
 
-        function renderTabelaUsuarios(data) {
-            users = data;
+        function renderTabelaUsuarios(paginated) {
+            users = paginated.data;
             const tbody = document.getElementById('tbody-usuarios');
-            tbody.innerHTML = data.map(user => `
+            tbody.innerHTML = paginated.data.map(user => `
                 <tr>
                     <td class="d-flex">
                         <svg style="cursor:pointer" onclick="excluirUsuario(${user.id},'${user.name.replace(/'/g,"\\'")}') " xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#dc3545"><path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z"/></svg>
@@ -717,6 +732,35 @@
                     <td>${user.func > 0 ? 'Sim' : 'Não'}</td>
                 </tr>
             `).join('');
+
+            renderPaginacaoUsuarios(paginated);
+        }
+
+        function renderPaginacaoUsuarios(paginated) {
+            const container = document.querySelector('#collapseUsuarios .d-flex.justify-content-end');
+            if (!container) return;
+
+            const { current_page, last_page } = paginated;
+            if (last_page <= 1) { container.innerHTML = ''; return; }
+
+            let html = '<nav><ul class="pagination pagination-sm mb-0">';
+
+            html += `<li class="page-item ${current_page === 1 ? 'disabled' : ''}">
+                <a class="page-link" href="#" onclick="event.preventDefault(); searchUsuario(${current_page - 1})">‹</a>
+            </li>`;
+
+            for (let p = 1; p <= last_page; p++) {
+                html += `<li class="page-item ${p === current_page ? 'active' : ''}">
+                    <a class="page-link" href="#" onclick="event.preventDefault(); searchUsuario(${p})">${p}</a>
+                </li>`;
+            }
+
+            html += `<li class="page-item ${current_page === last_page ? 'disabled' : ''}">
+                <a class="page-link" href="#" onclick="event.preventDefault(); searchUsuario(${current_page + 1})">›</a>
+            </li>`;
+
+            html += '</ul></nav>';
+            container.innerHTML = html;
         }
 
         // ── Serviços ──────────────────────────────────────────────────────────
@@ -899,7 +943,8 @@
                 check.id        = id;
                 check.value     = slot.hora;
                 check.checked   = slot.disponivel;
-                if (mgmModoLeitura) check.disabled = true;
+                if (mgmModoLeitura || bloqueadoPorAgend) check.disabled = true;
+                if (bloqueadoPorAgend) check.title = 'Horário bloqueado — há uma consulta agendada';
 
                 const label = document.createElement('label');
                 label.htmlFor   = id;
@@ -960,6 +1005,7 @@
         });
 
         // ── Busca de consultas ────────────────────────────────────────────────
+        const hojeStr = '{{ now()->toDateString() }}';
         let consultaTimeout = null;
         function searchConsulta() {
             clearTimeout(consultaTimeout);
@@ -976,6 +1022,15 @@
 
             Object.keys(data).forEach(mes => {
                 const id = mes.toLowerCase().replace(/\s+/g, '-');
+
+                // Agrupar por dia
+                const diasMap = {};
+                data[mes].forEach(c => {
+                    const dataKey = c.data_inicio.substring(0, 10);
+                    if (!diasMap[dataKey]) diasMap[dataKey] = [];
+                    diasMap[dataKey].push(c);
+                });
+
                 let html = `
                     <div class="accordion-item">
                         <h2 class="accordion-header">
@@ -988,38 +1043,58 @@
                             <div class="accordion-body">
                 `;
 
-                data[mes].forEach(c => {
-                    const inicio = c.data_inicio.substring(11, 16);
-                    const fim    = c.data_fim.substring(11, 16);
-                    const dia    = c.data_inicio.substring(8, 10);
-
-                    consultaMap[c.id] = { ...c, mes, inicio, fim, dia };
-
-                    const nomePaciente  = document.createElement('span');
-                    nomePaciente.textContent = c.user.name;
-                    const nomeServico   = document.createElement('span');
-                    nomeServico.textContent  = c.servico?.descricao ?? '';
+                Object.keys(diasMap).forEach(dataKey => {
+                    const consultasDia = diasMap[dataKey];
+                    const isHoje = dataKey === hojeStr;
+                    const dtObj  = new Date(dataKey + 'T00:00:00');
+                    const diaLabel = dtObj.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
+                    const diaLabelCap = diaLabel.charAt(0).toUpperCase() + diaLabel.slice(1);
+                    const idDia = 'dia-' + dataKey;
 
                     html += `
-                        <div class="consulta-card ${c.confirmado ? '' : 'consulta-pendente'} d-flex justify-content-between align-items-center" data-consulta-id="${c.id}">
-                            <div class="d-flex flex-grow-1" onclick="editarConsulta(${c.id})" style="cursor:pointer">
-                                <div class="me-3 text-center">
-                                    <div class="consulta-data">Dia ${dia}</div>
-                                    <div class="consulta-hora">${inicio} <br>às<br> ${fim}</div>
-                                </div>
-                                <div>
-                                    <strong>Paciente:</strong> ${nomePaciente.textContent}<br>
-                                    <strong>Serviço:</strong> ${nomeServico.textContent}
-                                    ${!c.confirmado ? '<br><span class="badge bg-warning text-dark mt-1">Pendente confirmação</span>' : ''}
-                                </div>
-                            </div>
-                            ${!c.confirmado ? `<button class="btn btn-sm btn-success btn-confirmar ms-2" onclick="event.stopPropagation(); confirmarConsulta(${c.id})">Confirmar</button>` : ''}
-                            <button class="btn btn-sm btn-danger ms-2"
-                                onclick="event.stopPropagation(); excluirConsultaById(${c.id})">
-                                <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#ffffff"><path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z"/></svg>
+                        <div class="mb-2">
+                            <button class="btn btn-sm w-100 text-start d-flex align-items-center gap-2 ${isHoje ? 'btn-primary' : 'btn-outline-secondary'}"
+                                    data-bs-toggle="collapse" data-bs-target="#${idDia}">
+                                <span>${diaLabelCap}</span>
+                                <span class="badge ${isHoje ? 'bg-light text-dark' : 'bg-secondary'} ms-auto">${consultasDia.length}</span>
                             </button>
-                        </div>
+                            <div id="${idDia}" class="collapse ${isHoje ? 'show' : ''} pt-2">
                     `;
+
+                    consultasDia.forEach(c => {
+                        const inicio = c.data_inicio.substring(11, 16);
+                        const fim    = c.data_fim.substring(11, 16);
+                        const dia    = c.data_inicio.substring(8, 10);
+
+                        consultaMap[c.id] = { ...c, mes, inicio, fim, dia };
+
+                        const nomePaciente = document.createElement('span');
+                        nomePaciente.textContent = c.user.name;
+                        const nomeServico = document.createElement('span');
+                        nomeServico.textContent = c.servico?.descricao ?? '';
+
+                        html += `
+                            <div class="consulta-card ${c.confirmado ? '' : 'consulta-pendente'} d-flex justify-content-between align-items-center" data-consulta-id="${c.id}">
+                                <div class="d-flex flex-grow-1" onclick="editarConsulta(${c.id})" style="cursor:pointer">
+                                    <div class="me-3 text-center">
+                                        <div class="consulta-hora">${inicio} <br>às<br> ${fim}</div>
+                                    </div>
+                                    <div>
+                                        <strong>Paciente:</strong> ${nomePaciente.textContent}<br>
+                                        <strong>Serviço:</strong> ${nomeServico.textContent}
+                                        ${!c.confirmado ? '<br><span class="badge bg-warning text-dark mt-1">Pendente confirmação</span>' : ''}
+                                    </div>
+                                </div>
+                                ${!c.confirmado ? `<button class="btn btn-sm btn-success btn-confirmar ms-2" onclick="event.stopPropagation(); confirmarConsulta(${c.id})">Confirmar</button>` : ''}
+                                <button class="btn btn-sm btn-danger ms-2"
+                                    onclick="event.stopPropagation(); excluirConsultaById(${c.id})">
+                                    <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#ffffff"><path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z"/></svg>
+                                </button>
+                            </div>
+                        `;
+                    });
+
+                    html += `</div></div>`;
                 });
 
                 html += `</div></div></div>`;

@@ -56,8 +56,8 @@ class AuthenticatedSessionController extends Controller
         }
 
         // Cliente: fluxo OTP — respeita cooldown de 60s
-        if ($user->whatsapp_code_expires_at) {
-            $aguardar = max(0, (int) $user->whatsapp_code_expires_at->diffInSeconds(now()) - 300);
+        if ($user->whatsapp_code_expires_at && now()->lt($user->whatsapp_code_expires_at)) {
+            $aguardar = max(0, (int) $user->whatsapp_code_expires_at->diffInSeconds(now()) - 540);
             if ($aguardar > 0) {
                 $request->session()->put('login_user_id', $user->id);
                 return redirect()->route('login.verify')
@@ -88,8 +88,8 @@ class AuthenticatedSessionController extends Controller
         }
 
         $aguardar = 0;
-        if ($user->whatsapp_code_expires_at) {
-            $aguardar = max(0, (int) $user->whatsapp_code_expires_at->diffInSeconds(now()) - 300);
+        if ($user->whatsapp_code_expires_at && now()->lt($user->whatsapp_code_expires_at)) {
+            $aguardar = max(0, (int) $user->whatsapp_code_expires_at->diffInSeconds(now()) - 540);
         }
 
         return view('auth.login-verify', compact('user', 'aguardar'));
@@ -152,8 +152,8 @@ class AuthenticatedSessionController extends Controller
             return redirect()->route('login');
         }
 
-        $aguardar = $user->whatsapp_code_expires_at
-            ? max(0, (int) $user->whatsapp_code_expires_at->diffInSeconds(now()) - 300)
+        $aguardar = ($user->whatsapp_code_expires_at && now()->lt($user->whatsapp_code_expires_at))
+            ? max(0, (int) $user->whatsapp_code_expires_at->diffInSeconds(now()) - 540)
             : 0;
 
         if ($aguardar > 0) {

@@ -28,15 +28,17 @@ Route::get('/dashboard', function () {
         $consultasQuery->where('user_id', $user->id);
     }
 
-    $consultas = $consultasQuery->get()->groupBy(
-        fn($item) => \Carbon\Carbon::parse($item->data_inicio)->locale('pt_BR')->translatedFormat('F Y')
-    );
+    $hoje      = now()->toDateString();
+    $consultas = $consultasQuery->get()->groupBy([
+        fn($item) => \Carbon\Carbon::parse($item->data_inicio)->locale('pt_BR')->translatedFormat('F Y'),
+        fn($item) => \Carbon\Carbon::parse($item->data_inicio)->format('Y-m-d'),
+    ]);
 
     $avisos = ($user->adm || $user->func)
         ? Aviso::with(['user', 'servico'])->whereNull('dispensado_at')->latest()->get()
         : collect();
 
-    return view('dashboard', compact('users', 'clientes', 'servicos', 'consultas', 'mesAtual', 'avisos'));
+    return view('dashboard', compact('users', 'clientes', 'servicos', 'consultas', 'mesAtual', 'hoje', 'avisos'));
 })->middleware(['auth', 'verified', 'whatsapp.verified'])->name('dashboard');
 
 Route::get('/api/horarios/{data}', [AgendaController::class, 'horarios']);
@@ -89,12 +91,10 @@ Route::middleware('auth')->group(function () {
         if ($user->whatsappVerificado()) {
             return redirect()->route('dashboard');
         }
-        $codigoEnviado = !is_null($user->whatsapp_code_expires_at);
-        $aguardar = 0;
-        if ($codigoEnviado) {
-            // 60s de cooldown: expires_at é 600s a frente, aguardar = remaining - 540
-            $aguardar = max(0, $user->whatsapp_code_expires_at->diffInSeconds(now()) - 300);
-        }
+        $codigoEnviado = !is_null($user->whatsapp_code_expires_at) && now()->lt($user->whatsapp_code_expires_at);
+        $aguardar = $codigoEnviado
+            ? max(0, (int) $user->whatsapp_code_expires_at->diffInSeconds(now()) - 540)
+            : 0;
         return view('auth.verificar-whatsapp', compact('aguardar', 'codigoEnviado'));
     })->name('verificar.whatsapp');
 
@@ -116,8 +116,8 @@ Route::middleware('auth')->group(function () {
         if ($user->whatsappVerificado()) {
             return redirect()->route('dashboard');
         }
-        $aguardar = $user->whatsapp_code_expires_at
-            ? max(0, $user->whatsapp_code_expires_at->diffInSeconds(now()) - 300)
+        $aguardar = ($user->whatsapp_code_expires_at && now()->lt($user->whatsapp_code_expires_at))
+            ? max(0, (int) $user->whatsapp_code_expires_at->diffInSeconds(now()) - 540)
             : 0;
         if ($aguardar > 0) {
             return redirect()->route('verificar.whatsapp')

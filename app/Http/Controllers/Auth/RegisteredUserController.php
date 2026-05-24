@@ -105,18 +105,18 @@ class RegisteredUserController extends Controller
         $q      = trim($request->q);
         $campos = ['id', 'name', 'whatsapp', 'adm', 'func'];
 
-        if ($q === '') {
-            $users = User::select($campos)->where('excluido', 0)->orderBy('name')->limit(50)->get();
-        } else {
-            $users = User::select($campos)
-                ->where('excluido', 0)
-                ->where(function ($query) use ($q) {
-                    $query->where('name', 'like', "%{$q}%")
-                          ->orWhere('whatsapp', 'like', "%{$q}%");
-                })
-                ->orderBy('name')
-                ->get();
-        }
+        $users = User::select($campos)
+            ->where('excluido', 0)
+            ->when($q !== '', function ($query) use ($q) {
+                $query->where(function ($q2) use ($q) {
+                    $q2->where('name', 'like', "%{$q}%")
+                       ->orWhere('whatsapp', 'like', "%{$q}%");
+                });
+            })
+            ->orderBy('adm', 'desc')
+            ->orderBy('func', 'desc')
+            ->orderBy('name')
+            ->paginate(10);
 
         return response()->json($users);
     }

@@ -9,7 +9,6 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Validation\Rules;
 use Illuminate\View\View;
 
 class RegisteredUserController extends Controller
@@ -27,12 +26,9 @@ class RegisteredUserController extends Controller
         $request->validate([
             'nome'     => ['required', 'string', 'max:255'],
             'whatsapp' => ['required', 'string', 'max:20'],
-            'senha'    => ['required', 'confirmed', Rules\Password::defaults()],
         ], [
             'nome.required'     => 'Informe o nome.',
             'whatsapp.required' => 'Informe o número de WhatsApp.',
-            'senha.required'    => 'Informe a senha.',
-            'senha.confirmed'   => 'As senhas não conferem.',
         ]);
 
         $numero = preg_replace('/\D/', '', $request->whatsapp);
@@ -42,7 +38,7 @@ class RegisteredUserController extends Controller
 
         $user = User::create([
             'name'     => $request->nome,
-            'password' => Hash::make($request->senha),
+            'password' => Hash::make(\Illuminate\Support\Str::random(32)),
             'whatsapp' => $numero,
             'adm'      => $request->input('tipo') === 'adm' ? 1 : 0,
             'func'     => $request->input('tipo') === 'func' ? 1 : 0,

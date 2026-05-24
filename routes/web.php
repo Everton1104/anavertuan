@@ -93,7 +93,7 @@ Route::middleware('auth')->group(function () {
         $aguardar = 0;
         if ($codigoEnviado) {
             // 60s de cooldown: expires_at é 600s a frente, aguardar = remaining - 540
-            $aguardar = max(0, $user->whatsapp_code_expires_at->diffInSeconds(now()) - 540);
+            $aguardar = max(0, $user->whatsapp_code_expires_at->diffInSeconds(now()) - 300);
         }
         return view('auth.verificar-whatsapp', compact('aguardar', 'codigoEnviado'));
     })->name('verificar.whatsapp');
@@ -117,7 +117,7 @@ Route::middleware('auth')->group(function () {
             return redirect()->route('dashboard');
         }
         $aguardar = $user->whatsapp_code_expires_at
-            ? max(0, $user->whatsapp_code_expires_at->diffInSeconds(now()) - 540)
+            ? max(0, $user->whatsapp_code_expires_at->diffInSeconds(now()) - 300)
             : 0;
         if ($aguardar > 0) {
             return redirect()->route('verificar.whatsapp')

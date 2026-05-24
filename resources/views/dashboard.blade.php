@@ -449,8 +449,9 @@
                         data-bs-parent="#accordionMeses">
                         <div class="accordion-body">
                             @forelse ($lista as $consulta)
-                                <div class="consulta-card {{ !$consulta->confirmado ? 'consulta-pendente' : '' }} d-flex justify-content-between align-items-center" data-consulta-id="{{ $consulta->id }}">
-                                    <div class="d-flex flex-grow-1" @if(auth()->user()->adm == 1 || auth()->user()->func == 1) onclick="editarConsulta({{ $consulta->id }})" style="cursor: pointer" @endif>
+                                @php $isStaff = auth()->user()->adm == 1 || auth()->user()->func == 1; @endphp
+                                <div class="consulta-card {{ !$consulta->confirmado ? 'consulta-pendente' : '' }} d-flex {{ $isStaff ? 'justify-content-between align-items-center' : 'flex-column' }}" data-consulta-id="{{ $consulta->id }}">
+                                    <div class="d-flex flex-grow-1" @if($isStaff) onclick="editarConsulta({{ $consulta->id }})" style="cursor: pointer" @endif>
                                         <div class="me-3 text-center">
                                             <div class="consulta-data">
                                                 Dia {{ \Carbon\Carbon::parse($consulta->data_inicio)->format('d') }}
@@ -464,7 +465,7 @@
                                             <strong>Paciente:</strong> {{ $consulta->user->name }}<br>
                                             <strong>Serviço:</strong> {{ $consulta->servico->descricao ?? '' }}<br>
                                             @if(!$consulta->confirmado)
-                                                @if(auth()->user()->adm || auth()->user()->func)
+                                                @if($isStaff)
                                                     <span class="badge bg-warning text-dark mt-1">Pendente confirmação</span>
                                                 @else
                                                     <span class="badge bg-info text-dark mt-1">Aguardando confirmação</span>
@@ -472,7 +473,7 @@
                                             @endif
                                         </div>
                                     </div>
-                                    @if(auth()->user()->adm == 1 || auth()->user()->func == 1)
+                                    @if($isStaff)
                                         @if(!$consulta->confirmado)
                                             <button class="btn btn-sm btn-success btn-confirmar ms-2"
                                                     onclick="event.stopPropagation(); confirmarConsulta({{ $consulta->id }})">
@@ -484,14 +485,22 @@
                                             <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#ffffff"><path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z"/></svg>
                                         </button>
                                     @elseif($consulta->data_inicio->isFuture())
-                                        <button class="btn btn-sm btn-outline-primary ms-2"
-                                                onclick="reagendarConsulta({{ $consulta->id }}, {{ $consulta->servico_id }}, @json($consulta->servico->descricao ?? ''))">
-                                            Reagendar
-                                        </button>
-                                        <button class="btn btn-sm btn-outline-danger ms-2"
-                                                onclick="cancelarConsulta({{ $consulta->id }}, {{ $consulta->servico_id }}, @json($consulta->servico->descricao ?? ''))">
-                                            Cancelar
-                                        </button>
+                                        <div class="d-flex gap-2 mt-3">
+                                            <button class="btn btn-sm btn-outline-primary"
+                                                    data-id="{{ $consulta->id }}"
+                                                    data-servico-id="{{ $consulta->servico_id }}"
+                                                    data-servico-nome="{{ $consulta->servico->descricao ?? '' }}"
+                                                    onclick="reagendarConsulta(this.dataset.id, this.dataset.servicoId, this.dataset.servicoNome)">
+                                                Reagendar
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-danger"
+                                                    data-id="{{ $consulta->id }}"
+                                                    data-servico-id="{{ $consulta->servico_id }}"
+                                                    data-servico-nome="{{ $consulta->servico->descricao ?? '' }}"
+                                                    onclick="cancelarConsulta(this.dataset.id, this.dataset.servicoId, this.dataset.servicoNome)">
+                                                Cancelar
+                                            </button>
+                                        </div>
                                     @endif
                                 </div>
                             @empty

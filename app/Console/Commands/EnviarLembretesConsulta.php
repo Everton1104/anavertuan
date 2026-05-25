@@ -53,14 +53,14 @@ class EnviarLembretesConsulta extends Command
                                 ->translatedFormat('d \d\e F \d\e Y');
             $hora          = Carbon::parse($agendamento->data_inicio)->format('H:i');
 
-            // Template aprovado na Meta:
-            // "Olá, {{1}}. Este é um lembrete sobre o seu próximo compromisso
-            //  com a {{2}} em {{3}} às {{4}}. Estamos ansiosos por te ver!"
             $resultado = WhatsappController::enviarModelo($phoneId, $user->whatsapp, $template, [
                 ['type' => 'text', 'text' => $nome],
                 ['type' => 'text', 'text' => $nomeComercial],
                 ['type' => 'text', 'text' => $data],
                 ['type' => 'text', 'text' => $hora],
+            ], 'pt_BR', [
+                'confirmar_' . $agendamento->id,
+                'reagendar_' . $agendamento->id,
             ]);
 
             $erro    = isset($resultado['erro']);

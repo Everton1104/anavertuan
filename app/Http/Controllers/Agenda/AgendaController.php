@@ -304,7 +304,7 @@ class AgendaController extends Controller
         $agendamento->servico_id  = $servico->id;
         $agendamento->data_inicio = $inicio;
         $agendamento->data_fim    = $fim;
-        $agendamento->confirmado  = $isStaff ? 1 : 0;
+        $agendamento->confirmado  = 0;
         $agendamento->save();
 
         if ($isStaff) {

@@ -2,8 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AgendamentoModel;
+use App\Models\Aviso;
 use App\Models\WhatsappLog;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 
@@ -27,6 +30,8 @@ class WhatsappController extends Controller
 
     public function getMsgs(Request $request)
     {
+        \Log::channel('single')->info('[WA-WEBHOOK]', ['payload' => $request->all()]);
+
         $business_phone_number_id = $request['entry'][0]['changes'][0]['value']['metadata']['phone_number_id'] ?? 0;
         $msg                      = $request['entry'][0]['changes'][0]['value']['messages'][0] ?? '';
         $status                   = $request['entry'][0]['changes'][0]['value']['statuses'] ?? null;
@@ -38,10 +43,81 @@ class WhatsappController extends Controller
                 return response()->json([], 200);
             }
 
+            $msgType = $msg['type'] ?? '';
+            $payload = $msg['button']['payload'] ?? '';
+
+            if ($msgType === 'button' && $payload) {
+                if (str_starts_with($payload, 'confirmar_')) {
+                    $agendamentoId = (int) str_replace('confirmar_', '', $payload);
+                    $this->tratarConfirmacao($business_phone_number_id, $number, $agendamentoId);
+                } elseif (str_starts_with($payload, 'reagendar_')) {
+                    $agendamentoId = (int) str_replace('reagendar_', '', $payload);
+                    $this->tratarReagendamento($business_phone_number_id, $number, $agendamentoId);
+                }
+            }
+
             return response()->json([], 200);
         } catch (\Throwable $th) {
             $this->enviarMsg($business_phone_number_id, $number, 'Erro interno. Tente novamente.');
             return response()->json([], 200);
+        }
+    }
+
+    // ── Tratamento de respostas de botões ────────────────────────────────────
+
+    private function tratarConfirmacao(string $phoneId, string $number, int $agendamentoId): void
+    {
+        $agendamento = AgendamentoModel::with('user')->find($agendamentoId);
+        if (!$agendamento) return;
+
+        $agendamento->confirmado = true;
+        $agendamento->save();
+
+        Aviso::create([
+            'tipo'        => 'confirmacao',
+            'user_id'     => $agendamento->user_id,
+            'servico_id'  => $agendamento->servico_id,
+            'data_antiga' => $agendamento->data_inicio,
+        ]);
+
+        $nome          = ucfirst($agendamento->user->name ?? 'você');
+        $nomeComercial = env('WHATSAPP_NOME_COMERCIAL', config('app.name'));
+        $data          = Carbon::parse($agendamento->data_inicio)
+                             ->locale('pt_BR')
+                             ->translatedFormat('d \d\e F');
+        $hora          = Carbon::parse($agendamento->data_inicio)->format('H:i');
+
+        self::enviarMsg($phoneId, $number,
+            "Perfeito, {$nome}! ✅ Sua presença está confirmada para o dia *{$data}* às *{$hora}*.\n\nEstamos te esperando na {$nomeComercial}. Até lá! 😊"
+        );
+    }
+
+    private function tratarReagendamento(string $phoneId, string $number, int $agendamentoId): void
+    {
+        $agendamento = AgendamentoModel::with(['user', 'servico'])->find($agendamentoId);
+        if (!$agendamento) return;
+
+        Aviso::create([
+            'tipo'        => 'reagendamento_solicitado',
+            'user_id'     => $agendamento->user_id,
+            'servico_id'  => $agendamento->servico_id,
+            'data_antiga' => $agendamento->data_inicio,
+        ]);
+
+        $nome   = ucfirst($agendamento->user->name ?? 'você');
+        $appUrl = rtrim(env('APP_URL', config('app.url')), '/');
+
+        self::enviarMsg($phoneId, $number,
+            "Tudo bem, {$nome}! 🔄 Para escolher um novo horário, acesse o link abaixo e faça login com o seu WhatsApp:\n\n{$appUrl}/dashboard\n\nSe preferir, nossa equipe pode te ajudar a encontrar o melhor horário. 😊"
+        );
+
+        $adminNumber = env('WHATSAPP_ADMIN_NUMBER');
+        if ($adminNumber) {
+            $nomeAdmin = ucfirst($agendamento->user->name ?? 'Cliente');
+            $data      = Carbon::parse($agendamento->data_inicio)->format('d/m/Y \à\s H:i');
+            self::enviarMsg($phoneId, $adminNumber,
+                "⚠️ {$nomeAdmin} quer reagendar a consulta de {$data}."
+            );
         }
     }
 
@@ -244,7 +320,7 @@ class WhatsappController extends Controller
         self::log($numero, Auth::id(), $desc, null, $business_phone_number_id);
     }
 
-    public static function enviarModelo($business_phone_number_id, $numero, $templateName, $parametros = [], $language = 'pt_BR')
+    public static function enviarModelo($business_phone_number_id, $numero, $templateName, $parametros = [], $language = 'pt_BR', $botoes = [])
     {
         try {
             $payload = [
@@ -257,10 +333,23 @@ class WhatsappController extends Controller
                 ],
             ];
 
+            $components = [];
+
             if (!empty($parametros)) {
-                $payload['template']['components'] = [
-                    ['type' => 'body', 'parameters' => $parametros],
+                $components[] = ['type' => 'body', 'parameters' => $parametros];
+            }
+
+            foreach ($botoes as $index => $payloadBotao) {
+                $components[] = [
+                    'type'       => 'button',
+                    'sub_type'   => 'quick_reply',
+                    'index'      => $index,
+                    'parameters' => [['type' => 'payload', 'payload' => $payloadBotao]],
                 ];
+            }
+
+            if (!empty($components)) {
+                $payload['template']['components'] = $components;
             }
 
             $client   = new \GuzzleHttp\Client();

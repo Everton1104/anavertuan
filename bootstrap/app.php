@@ -14,6 +14,10 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'whatsapp.verified' => \App\Http\Middleware\EnsureWhatsappIsVerified::class,
         ]);
+
+        $middleware->validateCsrfTokens(except: [
+            'whatsapp/webhook',
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

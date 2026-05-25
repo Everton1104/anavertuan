@@ -45,15 +45,21 @@
                 @method('post')
                 <x-app.input label="Nome" type="text" name="nome" id="nome_usuario" required="true" />
                 <x-app.input label="WhatsApp" type="tel" name="whatsapp" id="whatsapp_usuario" required="true" />
-                <x-app.input label="Senha" type="password" name="senha" id="senha_usuario" required="true" />
-                <x-app.input label="Confirmar Senha" type="password" name="senha_confirmation" id="senha_confirmation_usuario" required="true" />
-                <x-app.radio name="tipo"
-                    :options="[
-                        'adm' => 'Administrador',
-                        'func' => 'Funcionário',
-                        'cli' => 'Cliente'
-                    ]"
-                />
+                @if(auth()->user()->adm)
+                    <x-app.input label="Senha" type="password" name="senha" id="senha_usuario" />
+                    <x-app.input label="Confirmar Senha" type="password" name="senha_confirmation" id="senha_confirmation_usuario" />
+                @endif
+                @if(auth()->user()->adm)
+                    <x-app.radio name="tipo"
+                        :options="[
+                            'adm' => 'Administrador',
+                            'func' => 'Funcionário',
+                            'cli' => 'Cliente'
+                        ]"
+                    />
+                @else
+                    <input type="hidden" name="tipo" value="cli">
+                @endif
             </form>
         </x-app.modal>
 
@@ -65,15 +71,21 @@
                 <x-app.input type="hidden" name="id" id="edt-id" required="true" />
                 <x-app.input label="Nome" type="text" name="nome_edt" id="edt-name" required="true" />
                 <x-app.input label="WhatsApp" type="tel" name="whatsapp_edt" id="edt-whatsapp" />
-                <x-app.input label="Senha" type="password" name="senha_edt" id="senha_usuario_edt" required="true" />
-                <x-app.input label="Confirmar Senha" type="password" name="senha_confirmation_edt" id="senha_confirmation_usuario_edt" required="true" />
-                <x-app.radio name="tipo_edt"
-                    :options="[
-                        'adm' => 'Administrador',
-                        'func' => 'Funcionário',
-                        'cli' => 'Cliente'
-                    ]"
-                />
+                @if(auth()->user()->adm)
+                    <x-app.input label="Senha" type="password" name="senha_edt" id="senha_usuario_edt" />
+                    <x-app.input label="Confirmar Senha" type="password" name="senha_confirmation_edt" id="senha_confirmation_usuario_edt" />
+                @endif
+                @if(auth()->user()->adm)
+                    <x-app.radio name="tipo_edt"
+                        :options="[
+                            'adm' => 'Administrador',
+                            'func' => 'Funcionário',
+                            'cli' => 'Cliente'
+                        ]"
+                    />
+                @else
+                    <input type="hidden" name="tipo_edt" value="cli">
+                @endif
             </form>
         </x-app.modal>
 
@@ -310,12 +322,20 @@
                                     <strong>{{ ucfirst($aviso->user->name) }}</strong> cancelou a consulta de
                                     <em>{{ $aviso->servico->descricao }}</em> do dia
                                     {{ $aviso->data_antiga->format('d/m/Y') }} às {{ $aviso->data_antiga->format('H:i') }}.
-                                @else
+                                @elseif($aviso->tipo === 'reagendamento')
                                     <strong>{{ ucfirst($aviso->user->name) }}</strong> reagendou
                                     <em>{{ $aviso->servico->descricao }}</em>:
                                     {{ $aviso->data_antiga->format('d/m/Y H:i') }}
                                     <strong>→</strong>
                                     {{ $aviso->data_nova->format('d/m/Y H:i') }}
+                                @elseif($aviso->tipo === 'confirmacao')
+                                    <strong>{{ ucfirst($aviso->user->name) }}</strong> confirmou presença em
+                                    <em>{{ $aviso->servico->descricao }}</em> no dia
+                                    {{ $aviso->data_antiga->format('d/m/Y') }} às {{ $aviso->data_antiga->format('H:i') }}. ✅
+                                @elseif($aviso->tipo === 'reagendamento_solicitado')
+                                    <strong>{{ ucfirst($aviso->user->name) }}</strong> solicitou reagendamento de
+                                    <em>{{ $aviso->servico->descricao }}</em> marcado para
+                                    {{ $aviso->data_antiga->format('d/m/Y') }} às {{ $aviso->data_antiga->format('H:i') }}. 🔄
                                 @endif
                                 <br><small class="text-muted">{{ $aviso->created_at->diffForHumans() }}</small>
                             </div>
@@ -472,15 +492,16 @@
                                                         </div>
                                                     </div>
                                                     <div>
-                                                        <strong>Paciente:</strong> {{ $consulta->user->name }}<br>
-                                                        <strong>Serviço:</strong> {{ $consulta->servico->descricao ?? '' }}<br>
-                                                        @if(!$consulta->confirmado)
-                                                            @if($isStaff)
-                                                                <span class="badge bg-warning text-dark mt-1">Pendente confirmação</span>
-                                                            @else
-                                                                <span class="badge bg-info text-dark mt-1">Aguardando confirmação</span>
-                                                            @endif
+                                                        @if($consulta->confirmado)
+                                                            <span class="badge bg-success mb-1">✓ Confirmado</span>
+                                                        @elseif($isStaff)
+                                                            <span class="badge bg-warning text-dark mb-1">Pendente confirmação</span>
+                                                        @else
+                                                            <span class="badge bg-warning text-dark mb-1">Aguardando confirmação</span>
                                                         @endif
+                                                        <br>
+                                                        <strong>Paciente:</strong> {{ $consulta->user->name }}<br>
+                                                        <strong>Serviço:</strong> {{ $consulta->servico->descricao ?? '' }}
                                                     </div>
                                                 </div>
                                                 @if($isStaff)

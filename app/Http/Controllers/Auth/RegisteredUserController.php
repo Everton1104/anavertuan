@@ -23,12 +23,23 @@ class RegisteredUserController extends Controller
     {
         abort_unless(auth()->user()->adm || auth()->user()->func, 403);
 
-        $request->validate([
+        $rules = [
             'nome'     => ['required', 'string', 'max:255'],
             'whatsapp' => ['required', 'string', 'max:20'],
-        ], [
+        ];
+
+        $isAdm = auth()->user()->adm;
+
+        if ($isAdm && $request->filled('senha')) {
+            $rules['senha']             = ['min:6', 'confirmed'];
+            $rules['senha_confirmation'] = ['required'];
+        }
+
+        $request->validate($rules, [
             'nome.required'     => 'Informe o nome.',
             'whatsapp.required' => 'Informe o número de WhatsApp.',
+            'senha.confirmed'   => 'As senhas não conferem.',
+            'senha.min'         => 'A senha deve ter no mínimo 6 caracteres.',
         ]);
 
         $numero = preg_replace('/\D/', '', $request->whatsapp);
@@ -36,12 +47,16 @@ class RegisteredUserController extends Controller
             $numero = '55' . $numero;
         }
 
+        $senha = ($isAdm && $request->filled('senha'))
+            ? $request->senha
+            : 'senha@padrao';
+
         $user = User::create([
             'name'     => $request->nome,
-            'password' => Hash::make(\Illuminate\Support\Str::random(32)),
+            'password' => Hash::make($senha),
             'whatsapp' => $numero,
-            'adm'      => $request->input('tipo') === 'adm' ? 1 : 0,
-            'func'     => $request->input('tipo') === 'func' ? 1 : 0,
+            'adm'      => $isAdm && $request->input('tipo') === 'adm' ? 1 : 0,
+            'func'     => $isAdm && $request->input('tipo') === 'func' ? 1 : 0,
         ]);
 
         event(new Registered($user));
@@ -80,10 +95,11 @@ class RegisteredUserController extends Controller
             ]);
         }
 
+        $isAdm      = auth()->user()->adm;
         $updateData = [
             'name' => $request['nome_edt'],
-            'adm'  => $request['tipo_edt'] == 'adm' ? 1 : 0,
-            'func' => $request['tipo_edt'] == 'func' ? 1 : 0,
+            'adm'  => $isAdm && $request['tipo_edt'] == 'adm' ? 1 : 0,
+            'func' => $isAdm && $request['tipo_edt'] == 'func' ? 1 : 0,
         ];
 
         if ($request->filled('whatsapp_edt')) {

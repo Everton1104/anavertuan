@@ -120,6 +120,13 @@
     let diasDisponiveis = []; // array de números de dia com pelo menos 1 slot disponível
     let dataAtual = new Date();
 
+    const calStorageKey = 'cal_mes_ano';
+    const savedMes = sessionStorage.getItem(calStorageKey);
+    if (savedMes) {
+        const [ano, mes] = savedMes.split('-').map(Number);
+        dataAtual = new Date(ano, mes, 1);
+    }
+
     @if(old('dia_selecionado'))
         dataAtual = new Date("{{ old('dia_selecionado') }}");
     @endif
@@ -137,6 +144,7 @@
     async function carregarMes() {
         const ano = dataAtual.getFullYear();
         const mes = dataAtual.getMonth() + 1;
+        sessionStorage.setItem(calStorageKey, `${ano}-${dataAtual.getMonth()}`);
         try {
             const res = await axios.get(`/api/dias-disponiveis/${ano}/${mes}`);
             diasDisponiveis = res.data;
@@ -258,6 +266,7 @@
 
     document.getElementById("cal-today").addEventListener("click", () => {
         dataAtual = new Date();
+        sessionStorage.removeItem(calStorageKey);
         carregarMes();
     });
 

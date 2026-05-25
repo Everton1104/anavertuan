@@ -811,9 +811,17 @@
         let mgmDataAtual       = new Date();
         let mgmDiasDisponiveis = [];
 
+        const mgmCalStorageKey = 'mgm_cal_mes_ano';
+        const mgmSavedMes = sessionStorage.getItem(mgmCalStorageKey);
+        if (mgmSavedMes) {
+            const [mgmAnoSaved, mgmMesSaved] = mgmSavedMes.split('-').map(Number);
+            mgmDataAtual = new Date(mgmAnoSaved, mgmMesSaved, 1);
+        }
+
         async function mgmCarregarMes() {
             const ano = mgmDataAtual.getFullYear();
             const mes = mgmDataAtual.getMonth() + 1;
+            sessionStorage.setItem(mgmCalStorageKey, `${ano}-${mgmDataAtual.getMonth()}`);
             try {
                 const res = await axios.get(`/api/dias-disponiveis/${ano}/${mes}`);
                 mgmDiasDisponiveis = res.data; // array de números de dia
@@ -908,6 +916,7 @@
         });
         document.getElementById('mgm-cal-today').addEventListener('click', () => {
             mgmDataAtual = new Date();
+            sessionStorage.removeItem(mgmCalStorageKey);
             mgmCarregarMes();
         });
 

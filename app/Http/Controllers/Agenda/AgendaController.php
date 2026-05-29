@@ -53,13 +53,13 @@ class AgendaController extends Controller
 
         $slots = [];
 
-        // Exibir das 06:00 às 22:00 (32 slots de 30 min)
+        // Exibir das 06:00 às 22:00 em intervalos de 15 min (64 slots)
         $cursor = Carbon::parse($data . ' 06:00');
         $fim    = Carbon::parse($data . ' 22:00');
 
         while ($cursor < $fim) {
-            $hora       = $cursor->format('H:i');
-            $disponivel = in_array($hora, $slotsDisponiveis);
+            $hora        = $cursor->format('H:i');
+            $disponivel  = in_array($hora, $slotsDisponiveis);
             $agendamento = null;
 
             foreach ($consultas as $c) {
@@ -82,7 +82,7 @@ class AgendaController extends Controller
                 'agendamento' => $agendamento,
             ];
 
-            $cursor->addMinutes(30);
+            $cursor->addMinutes(15);
         }
 
         return response()->json($slots);
@@ -117,6 +117,9 @@ class AgendaController extends Controller
     // ── API: horários disponíveis para agendamento (para o calendário) ───────
     public function horarios($data)
     {
+        $authUser = auth()->user();
+        $isStaff  = $authUser && ($authUser->adm || $authUser->func);
+
         $slotsDisponiveis = DisponibilidadeModel::where('data', $data)
             ->orderBy('hora')
             ->pluck('hora')
@@ -133,14 +136,28 @@ class AgendaController extends Controller
             return response()->json(['error' => 'Serviço não encontrado'], 422);
         }
 
-        $ignoreId = request('ignore_id');
+        // Clientes não podem agendar serviços restritos ao staff
+        if (!$isStaff && !$servico->visivel_cliente) {
+            return response()->json(['error' => 'Serviço não disponível'], 403);
+        }
+
+        // Clientes só enxergam slots em :00 e :30
+        if (!$isStaff) {
+            $slotsDisponiveis = array_values(array_filter(
+                $slotsDisponiveis,
+                fn($h) => in_array(substr($h, 3, 2), ['00', '30'])
+            ));
+        }
+
+        $ignoreId  = request('ignore_id');
         $consultas = AgendamentoModel::whereDate('data_inicio', $data)
             ->when($ignoreId, fn($q) => $q->where('id', '!=', $ignoreId))
             ->orderBy('data_inicio')
             ->get();
 
         $duracaoMin      = $this->timeToMinutes($servico->duracao);
-        $slotsNecessarios = (int) ceil($duracaoMin / 30);
+        $intervalo       = $isStaff ? 15 : 30;
+        $slotsNecessarios = (int) ceil($duracaoMin / $intervalo);
 
         $agora = Carbon::now();
         $hoje  = $agora->toDateString();
@@ -148,9 +165,8 @@ class AgendaController extends Controller
         $horarios = [];
 
         foreach ($slotsDisponiveis as $hora) {
-            $inicio     = Carbon::parse($data . ' ' . $hora);
+            $inicio = Carbon::parse($data . ' ' . $hora);
 
-            // Slots passados no dia de hoje
             if ($data === $hoje && $inicio <= $agora) {
                 $horarios[] = [
                     'hora'    => $hora,
@@ -159,6 +175,7 @@ class AgendaController extends Controller
                 ];
                 continue;
             }
+
             $fimTeorico = $inicio->copy()->addMinutes($duracaoMin);
             $ocupado    = false;
             $motivo     = null;
@@ -174,10 +191,10 @@ class AgendaController extends Controller
                 }
             }
 
-            // 2. Slots consecutivos necessários para o serviço estão disponíveis?
+            // 2. Slots consecutivos necessários estão todos disponíveis?
             if (!$ocupado && $slotsNecessarios > 1) {
                 for ($i = 1; $i < $slotsNecessarios; $i++) {
-                    $slotCheck = $inicio->copy()->addMinutes(30 * $i)->format('H:i');
+                    $slotCheck = $inicio->copy()->addMinutes($intervalo * $i)->format('H:i');
                     if (!in_array($slotCheck, $slotsDisponiveis)) {
                         $ocupado = true;
                         $motivo  = 'Não comporta a duração do serviço';
@@ -186,7 +203,7 @@ class AgendaController extends Controller
                 }
             }
 
-            // 3. Duração do serviço conflita com algum agendamento?
+            // 3. Duração conflita com outro agendamento?
             if (!$ocupado) {
                 foreach ($consultas as $c) {
                     $inicioC = Carbon::parse($c->data_inicio);
@@ -215,7 +232,7 @@ class AgendaController extends Controller
         $request->validate(
             [
                 'user_id'     => ['required'],
-                'servico_id'  => ['required', 'exists:servicos,id'],
+                'servico_id'  => ['required', \Illuminate\Validation\Rule::exists('servicos', 'id')->where('excluido', 0)],
                 'data_inicio' => ['required', 'date', 'after:now'],
             ],
             [
@@ -228,40 +245,22 @@ class AgendaController extends Controller
             ]
         );
 
-        $servico = ServicosModel::find($request->servico_id);
-        $duracao = $this->timeToMinutes($servico->duracao);
-        $inicio  = Carbon::parse($request->data_inicio);
-        $fim     = $inicio->copy()->addMinutes($duracao);
-
-        // Buscar todos os slots disponíveis do dia
-        $slotsDisponiveis = DisponibilidadeModel::where('data', $inicio->toDateString())
-            ->pluck('hora')
-            ->map(fn($h) => substr($h, 0, 5))
-            ->toArray();
-
-        // Verificar se o slot inicial está disponível
-        if (!in_array($inicio->format('H:i'), $slotsDisponiveis)) {
-            return back()->withErrors(['data_inicio' => 'Este horário não está disponível'])->withInput();
-        }
-
-        // Verificar se todos os slots necessários estão disponíveis
-        $slotsNecessarios = (int) ceil($duracao / 30);
-        for ($i = 1; $i < $slotsNecessarios; $i++) {
-            $slotCheck = $inicio->copy()->addMinutes(30 * $i)->format('H:i');
-            if (!in_array($slotCheck, $slotsDisponiveis)) {
-                return back()->withErrors(['data_inicio' => 'O serviço ultrapassa os horários disponíveis'])->withInput();
-            }
-        }
-
         $authUser = auth()->user();
+        $isStaff  = $authUser->adm || $authUser->func;
         $ignoreId = $request->agendamento_id;
 
-        if (!$authUser->adm && !$authUser->func) {
+        $servico = ServicosModel::where('excluido', 0)->find($request->servico_id);
+        if (!$servico) {
+            return back()->withErrors(['servico_id' => 'Serviço inválido.'])->withInput();
+        }
+
+        // Clientes: buscar agendamento original uma única vez (reutilizado nas validações abaixo)
+        $agendamentoOriginal = null;
+        if (!$isStaff) {
             $request->merge(['user_id' => $authUser->id]);
 
-            // Clientes só podem reagendar — novos agendamentos são iniciados pelo funcionário
             if (!$ignoreId) {
-                abort(403);
+                abort(403); // Clientes só podem reagendar
             }
 
             $agendamentoOriginal = AgendamentoModel::where('id', $ignoreId)
@@ -273,6 +272,46 @@ class AgendaController extends Controller
                 return back()
                     ->withErrors(['data_inicio' => 'Não é possível alterar o serviço no reagendamento.'])
                     ->withInput();
+            }
+        }
+
+        // Clientes só podem usar serviços visíveis; exceção: reagendar com o serviço original
+        if (!$isStaff && !$servico->visivel_cliente) {
+            if (!$agendamentoOriginal || (int) $agendamentoOriginal->servico_id !== (int) $servico->id) {
+                abort(403);
+            }
+        }
+
+        $duracao   = $this->timeToMinutes($servico->duracao);
+        $intervalo = $isStaff ? 15 : 30;
+        $inicio    = Carbon::parse($request->data_inicio);
+        $fim       = $inicio->copy()->addMinutes($duracao);
+
+        // Buscar todos os slots disponíveis do dia
+        $slotsDisponiveis = DisponibilidadeModel::where('data', $inicio->toDateString())
+            ->pluck('hora')
+            ->map(fn($h) => substr($h, 0, 5))
+            ->toArray();
+
+        // Clientes só podem usar slots em :00 e :30
+        if (!$isStaff) {
+            $slotsDisponiveis = array_values(array_filter(
+                $slotsDisponiveis,
+                fn($h) => in_array(substr($h, 3, 2), ['00', '30'])
+            ));
+        }
+
+        // Verificar se o slot inicial está disponível
+        if (!in_array($inicio->format('H:i'), $slotsDisponiveis)) {
+            return back()->withErrors(['data_inicio' => 'Este horário não está disponível'])->withInput();
+        }
+
+        // Verificar se todos os slots necessários estão disponíveis
+        $slotsNecessarios = (int) ceil($duracao / $intervalo);
+        for ($i = 1; $i < $slotsNecessarios; $i++) {
+            $slotCheck = $inicio->copy()->addMinutes($intervalo * $i)->format('H:i');
+            if (!in_array($slotCheck, $slotsDisponiveis)) {
+                return back()->withErrors(['data_inicio' => 'O serviço ultrapassa os horários disponíveis'])->withInput();
             }
         }
 
@@ -291,14 +330,13 @@ class AgendaController extends Controller
 
         $dataAntiga = null;
         if ($ignoreId) {
-            $agendamento = AgendamentoModel::findOrFail($ignoreId);
+            $agendamento = $agendamentoOriginal ?? AgendamentoModel::findOrFail($ignoreId);
             $dataAntiga  = $agendamento->data_inicio;
         } else {
             $agendamento = new AgendamentoModel();
         }
 
         $isEdicao = !empty($ignoreId);
-        $isStaff  = $authUser->adm || $authUser->func;
 
         $agendamento->user_id     = $request->user_id;
         $agendamento->servico_id  = $servico->id;

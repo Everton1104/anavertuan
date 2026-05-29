@@ -6,30 +6,40 @@ use App\Http\Controllers\Controller;
 use App\Models\AgendamentoModel;
 use App\Models\ServicosModel;
 use Illuminate\Http\Request;
-use Illuminate\Validation\ValidationException;
 
 class ServicoController extends Controller
 {
     public function store(Request $request)
     {
         $request->validate([
-            'descricao' => ['required', 'string', 'max:255', 'min:5'],
-            'duracao_h' => ['required', 'numeric'],
-            'duracao_m' => ['required', 'numeric'],
-        ]);
-        
-        if(($request->duracao_h + $request->duracao_m) <= 0){
-            return redirect()->back()->withErrors([
-                'duracao_m' => 'O tempo mínimo é de 30 minutos.'
-            ])->withInput($request->all());
-        }
-        
-        ServicosModel::create([
-            'descricao' => $request->descricao,
-            'duracao' => $request->duracao_h . ':' . $request->duracao_m . ':' . '00',
+            'descricao'       => ['required', 'string', 'max:255', 'min:5'],
+            'duracao_h'       => ['required', 'numeric'],
+            'duracao_m'       => ['required', 'numeric'],
+            'visivel_cliente' => ['nullable', 'boolean'],
         ]);
 
-        return redirect()->back()->with('msg', 'Servico criado com sucesso!');
+        $visivelCliente = (bool) $request->visivel_cliente;
+        $totalMinutos   = ($request->duracao_h * 60) + $request->duracao_m;
+
+        if ($totalMinutos <= 0) {
+            return redirect()->back()->withErrors([
+                'duracao_m' => 'O tempo mínimo é de 15 minutos.',
+            ])->withInput($request->all());
+        }
+
+        if ($visivelCliente && $totalMinutos < 30) {
+            return redirect()->back()->withErrors([
+                'duracao_m' => 'Serviços visíveis para clientes precisam ter no mínimo 30 minutos.',
+            ])->withInput($request->all());
+        }
+
+        ServicosModel::create([
+            'descricao'       => $request->descricao,
+            'duracao'         => $request->duracao_h . ':' . $request->duracao_m . ':00',
+            'visivel_cliente' => $visivelCliente,
+        ]);
+
+        return redirect()->back()->with('msg', 'Serviço criado com sucesso!');
     }
 
     public function delete(Request $request)
@@ -39,15 +49,16 @@ class ServicoController extends Controller
         ]);
 
         $consultas = AgendamentoModel::with(['user', 'servico'])
-            ->where('servico_id','=',$request['excluir-servico-id'])
+            ->where('servico_id', '=', $request['excluir-servico-id'])
             ->get();
-        if($consultas->count() > 0){
+
+        if ($consultas->count() > 0) {
             return redirect()->back()->with('msgErro', 'Ainda existem clientes registrados com esse serviço!');
         }
-        
+
         try {
             ServicosModel::find($request['excluir-servico-id'])->update(['excluido' => 1]);
-            return redirect()->back()->with('msg', 'Serviço excluído com sucesso!');
+            return redirect()->back()->with('msg', 'Serviço excluído com sucesso!');
         } catch (\Throwable $th) {
             return redirect()->back()->with('msgErro', 'Erro ao excluir serviço!');
         }
@@ -56,26 +67,36 @@ class ServicoController extends Controller
     public function editar(Request $request)
     {
         $request->validate([
-            'id_edt_servico' => 'required|numeric',
-            'descricao_edt_servico' => ['required', 'string', 'max:255', 'min:5'],
-            'duracao_h_edt_servico' => ['required', 'numeric'],
-            'duracao_m_edt_servico' => ['required', 'numeric'],
-            'status_servico' => ['required', 'numeric'],
+            'id_edt_servico'          => 'required|numeric',
+            'descricao_edt_servico'   => ['required', 'string', 'max:255', 'min:5'],
+            'duracao_h_edt_servico'   => ['required', 'numeric'],
+            'duracao_m_edt_servico'   => ['required', 'numeric'],
+            'status_servico'          => ['required', 'numeric'],
+            'visivel_cliente_servico' => ['nullable', 'boolean'],
         ]);
 
-        if(($request->duracao_h_edt_servico + $request->duracao_m_edt_servico) <= 0){
+        $visivelCliente = (bool) $request->visivel_cliente_servico;
+        $totalMinutos   = ($request->duracao_h_edt_servico * 60) + $request->duracao_m_edt_servico;
+
+        if ($totalMinutos <= 0) {
             return redirect()->back()->withErrors([
-                'duracao_m_edt_servico' => 'O tempo mínimo é de 30 minutos.'
+                'duracao_m_edt_servico' => 'O tempo mínimo é de 15 minutos.',
+            ])->withInput($request->all());
+        }
+
+        if ($visivelCliente && $totalMinutos < 30) {
+            return redirect()->back()->withErrors([
+                'duracao_m_edt_servico' => 'Serviços visíveis para clientes precisam ter no mínimo 30 minutos.',
             ])->withInput($request->all());
         }
 
         ServicosModel::find($request['id_edt_servico'])->update([
-            'descricao' => $request['descricao_edt_servico'],
-            'duracao' => $request['duracao_h_edt_servico'] . ':' . $request['duracao_m_edt_servico'] . ':' . '00',
-            'status' => $request['status_servico']
+            'descricao'       => $request['descricao_edt_servico'],
+            'duracao'         => $request['duracao_h_edt_servico'] . ':' . $request['duracao_m_edt_servico'] . ':00',
+            'status'          => $request['status_servico'],
+            'visivel_cliente' => $visivelCliente,
         ]);
-        
+
         return redirect()->back()->with('msg', 'Serviço atualizado com sucesso!');
     }
-
 }

@@ -168,7 +168,14 @@
                 <x-app.input label="Nome do Serviço" type="text" name="descricao" id="servico_desc" required="true" />
                 <p class="fs-5 my-2">Duração do Serviço</p>
                 <x-app.select label="Horas" name="duracao_h" required="true" :options="['00'=>'00', '01'=>'01', '02'=>'02']" />
-                <x-app.select label="Minutos" name="duracao_m" required="true" :options="['00'=>'00', '30'=>'30']" />
+                <x-app.select label="Minutos" name="duracao_m" required="true" :options="['00'=>'00', '15'=>'15', '30'=>'30', '45'=>'45']" />
+                <div class="form-check mt-3">
+                    <input class="form-check-input" type="checkbox" name="visivel_cliente" id="add_visivel_cliente" value="1" checked>
+                    <label class="form-check-label" for="add_visivel_cliente">
+                        Visível para clientes
+                    </label>
+                    <div class="form-text text-muted">Desmarque para serviços de 15 min (exclusivos para funcionários/admin).</div>
+                </div>
             </form>
         </x-app.modal>
 
@@ -181,7 +188,14 @@
                 <x-app.input label="Descrição" type="text" name="descricao_edt_servico" required="true" />
                 <p class="fs-5 my-2">Duração do Serviço</p>
                 <x-app.select label="Horas" name="duracao_h_edt_servico" required="true" :options="['00'=>'00', '01'=>'01', '02'=>'02']" />
-                <x-app.select label="Minutos" name="duracao_m_edt_servico" required="true" :options="['00'=>'00', '30'=>'30']" />
+                <x-app.select label="Minutos" name="duracao_m_edt_servico" required="true" :options="['00'=>'00', '15'=>'15', '30'=>'30', '45'=>'45']" />
+                <div class="form-check mt-3 mb-2">
+                    <input class="form-check-input" type="checkbox" name="visivel_cliente_servico" id="edt_visivel_cliente" value="1">
+                    <label class="form-check-label" for="edt_visivel_cliente">
+                        Visível para clientes
+                    </label>
+                    <div class="form-text text-muted">Desmarque para serviços de 15 min (exclusivos para funcionários/admin).</div>
+                </div>
                 <x-app.radio name="status_servico"
                     :options="[
                         '0' => 'INATIVO',
@@ -222,6 +236,7 @@
                                     <th scope="col">Serviço</th>
                                     <th scope="col">Duração</th>
                                     <th scope="col">Status</th>
+                                    <th scope="col">Visível</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -234,6 +249,13 @@
                                         <td>{{ $servico->descricao }}</td>
                                         <td>{{ $servico->duracao }}</td>
                                         <td class="text-{{ $servico->status == 0 ? 'danger' : 'success' }}">{{ $servico->status == 0 ? 'INATIVO' : 'ATIVO' }}</td>
+                                        <td>
+                                            @if($servico->visivel_cliente)
+                                                <span class="badge bg-success">Clientes</span>
+                                            @else
+                                                <span class="badge bg-secondary">Staff</span>
+                                            @endif
+                                        </td>
                                     </tr>
                                 @endforeach
                             </tbody>
@@ -255,7 +277,7 @@
                         <input type="hidden" id="mgm-data-atual">
                         {{-- Ações rápidas --}}
                         <div class="d-flex flex-wrap gap-2 mb-3">
-                            <button class="btn btn-sm btn-outline-success" onclick="mgmPreset('comercial')">Horário comercial (08:00–18:00)</button>
+                            <button class="btn btn-sm btn-outline-success" onclick="mgmPreset('comercial')">Horário comercial (08:00–17:45)</button>
                             <button class="btn btn-sm btn-outline-primary" onclick="mgmPreset('tudo')">Selecionar tudo</button>
                             <button class="btn btn-sm btn-outline-secondary" onclick="mgmPreset('limpar')">Limpar tudo</button>
                         </div>
@@ -364,7 +386,7 @@
                     @csrf
                     @method('post')
                     <x-app.select label="Cliente" name="user_id" required="true" :options="$clientes->pluck('name', 'id')" />
-                    <x-app.select label="Selecione o serviço" name="servico_id" required="true" :options="$servicos->where('status', 1)->mapWithKeys(fn($s) => [$s->id => $s->descricao . ' — ' . substr($s->duracao, 0, 5)])" />
+                    <x-app.select label="Selecione o serviço" name="servico_id" required="true" :options="$servicos->where('status', 1)->mapWithKeys(fn($s) => [$s->id => $s->descricao . ' — ' . substr($s->duracao, 0, 5) . ($s->visivel_cliente ? '' : ' [Staff]')])" />
                     <input type="hidden" name="data_inicio" id="data_inicio" />
                     <input type="hidden" name="data_fim" id="data_fim" />
                     <input type="hidden" id="dia_selecionado" name="dia_selecionado">
@@ -804,6 +826,8 @@
             $('[name="status_servico"]').prop('checked', false);
             $(`#status_servico_${servico.status}`).prop('checked', true);
 
+            $('#edt_visivel_cliente').prop('checked', servico.visivel_cliente == 1);
+
             $('#modal-edt-servico').modal('show');
         }
 
@@ -1003,8 +1027,8 @@
                 if (tipo === 'tudo')      cb.checked = true;
                 else if (tipo === 'limpar') cb.checked = false;
                 else if (tipo === 'comercial') {
-                    // 08:00 até 17:30 (última slot que começa antes das 18:00)
-                    cb.checked = cb.value >= '08:00' && cb.value <= '17:30';
+                    // 08:00 até 17:45 (última slot antes das 18:00, com intervalos de 15 min)
+                    cb.checked = cb.value >= '08:00' && cb.value <= '17:45';
                 }
             });
         }

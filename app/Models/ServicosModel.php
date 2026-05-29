@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class ServicosModel extends Model
 {
     protected $table = 'servicos';
-    protected $fillable = ['descricao', 'duracao', 'status', 'excluido'];
+    protected $fillable = ['descricao', 'duracao', 'status', 'excluido', 'visivel_cliente'];
 
     public function agendamentos()
     {

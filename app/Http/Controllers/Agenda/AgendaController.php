@@ -160,18 +160,27 @@ class AgendaController extends Controller
         $slotsNecessarios = (int) ceil($duracaoMin / $intervalo);
 
         $agora = Carbon::now();
-        $hoje  = $agora->toDateString();
 
         $horarios = [];
 
         foreach ($slotsDisponiveis as $hora) {
             $inicio = Carbon::parse($data . ' ' . $hora);
 
-            if ($data === $hoje && $inicio <= $agora) {
+            if ($inicio <= $agora) {
                 $horarios[] = [
                     'hora'    => $hora,
                     'ocupado' => true,
                     'motivo'  => 'Horário já passou',
+                ];
+                continue;
+            }
+
+            // Clientes só podem agendar com no mínimo 2h de antecedência (tempo de deslocamento da nutri).
+            if (!$isStaff && $inicio < $agora->copy()->addHours(2)) {
+                $horarios[] = [
+                    'hora'    => $hora,
+                    'ocupado' => true,
+                    'motivo'  => 'Antecedência mínima de 2h',
                 ];
                 continue;
             }
@@ -287,6 +296,13 @@ class AgendaController extends Controller
         $inicio    = Carbon::parse($request->data_inicio);
         $fim       = $inicio->copy()->addMinutes($duracao);
 
+        // Clientes só podem agendar com no mínimo 2h de antecedência (tempo de deslocamento da nutri).
+        if (!$isStaff && $inicio < Carbon::now()->addHours(2)) {
+            return back()
+                ->withErrors(['data_inicio' => 'Só é possível agendar com no mínimo 2 horas de antecedência.'])
+                ->withInput();
+        }
+
         // Buscar todos os slots disponíveis do dia
         $slotsDisponiveis = DisponibilidadeModel::where('data', $inicio->toDateString())
             ->pluck('hora')
@@ -394,6 +410,50 @@ class AgendaController extends Controller
         }
     }
 
+    // Reenvia manualmente (pela equipe) o lembrete com os botões confirmar/reagendar.
+    public function reenviarLembrete($id)
+    {
+        $user = auth()->user();
+        if (!$user->adm && !$user->func) {
+            return response()->json(['error' => 'Não autorizado'], 403);
+        }
+
+        $agendamento = AgendamentoModel::with(['user', 'servico'])->findOrFail($id);
+        $cliente     = $agendamento->user;
+        $phoneId     = env('PHONE_NUMBER_ID');
+        $template    = env('WHATSAPP_TEMPLATE_LEMBRETE');
+
+        if (!$cliente || !$cliente->whatsapp) {
+            return response()->json(['error' => 'Cliente sem WhatsApp cadastrado.'], 422);
+        }
+        if (!$phoneId || !$template) {
+            return response()->json(['error' => 'WhatsApp não configurado.'], 422);
+        }
+
+        $nome          = ucfirst($cliente->name);
+        $nomeComercial = env('WHATSAPP_NOME_COMERCIAL', config('app.name'));
+        $data          = Carbon::parse($agendamento->data_inicio)
+                             ->locale('pt_BR')
+                             ->translatedFormat('d \d\e F \d\e Y');
+        $hora          = Carbon::parse($agendamento->data_inicio)->format('H:i');
+
+        $resultado = WhatsappController::enviarModelo($phoneId, $cliente->whatsapp, $template, [
+            ['type' => 'text', 'text' => $nome],
+            ['type' => 'text', 'text' => $nomeComercial],
+            ['type' => 'text', 'text' => $data],
+            ['type' => 'text', 'text' => $hora],
+        ], 'pt_BR', [
+            'confirmar_' . $agendamento->id,
+            'reagendar_' . $agendamento->id,
+        ]);
+
+        if (isset($resultado['erro'])) {
+            return response()->json(['error' => $resultado['msg'] ?? 'Falha ao enviar lembrete.'], 422);
+        }
+
+        return response()->json(['ok' => true]);
+    }
+
     public function confirmar($id)
     {
         $user = auth()->user();
@@ -402,12 +462,13 @@ class AgendaController extends Controller
         }
 
         $agendamento = AgendamentoModel::with(['user', 'servico'])->findOrFail($id);
-        $agendamento->confirmado = 1;
+        $agendamento->confirmado    = 1;
+        $agendamento->confirmado_em = now();
         $agendamento->save();
 
         $this->notificarWhatsApp($agendamento, false);
 
-        return response()->json(['ok' => true]);
+        return response()->json(['ok' => true, 'confirmado_em' => $agendamento->confirmado_em->format('d/m H:i')]);
     }
 
     public function edit($id)
@@ -492,7 +553,7 @@ class AgendaController extends Controller
             abort(403);
         }
 
-        $consultas = AgendamentoModel::with(['user', 'servico'])
+        $consultas = AgendamentoModel::with(['user', 'servico', 'lembretes'])
             ->when($q !== '', fn($query) =>
                 $query->whereHas('user', fn($u) => $u->where('name', 'like', "%{$q}%"))
             )

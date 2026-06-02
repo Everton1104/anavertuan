@@ -23,7 +23,7 @@ Route::get('/dashboard', function () {
     $servicos = ServicosModel::where('excluido', '0')->get();
     $mesAtual = now()->locale('pt_BR')->translatedFormat('F Y');
 
-    $consultasQuery = AgendamentoModel::with(['user', 'servico'])->orderBy('data_inicio');
+    $consultasQuery = AgendamentoModel::with(['user', 'servico', 'lembretes'])->orderBy('data_inicio');
 
     if (!$user->adm && !$user->func) {
         $consultasQuery->where('user_id', $user->id);
@@ -53,6 +53,7 @@ Route::post('editar-usuario', [RegisteredUserController::class, 'editar'])->midd
 Route::get('usuarios-search', [RegisteredUserController::class, 'search'])->middleware('auth')->name('usuarios.search');
 Route::resource('agenda', AgendaController::class)->middleware('auth');
 Route::post('agenda/{id}/confirmar', [AgendaController::class, 'confirmar'])->middleware('auth')->name('agenda.confirmar');
+Route::post('agenda/{id}/reenviar-lembrete', [AgendaController::class, 'reenviarLembrete'])->middleware('auth')->name('agenda.reenviar-lembrete');
 Route::post('aviso/{id}/dispensar', [AgendaController::class, 'dispensarAviso'])->middleware('auth')->name('aviso.dispensar');
 Route::get('agenda-search', [AgendaController::class, 'search'])->name('agenda.search');
 Route::resource('servico', ServicoController::class)->middleware('auth');

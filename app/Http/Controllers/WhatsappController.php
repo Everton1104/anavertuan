@@ -47,7 +47,10 @@ class WhatsappController extends Controller
             $payload = $msg['button']['payload'] ?? '';
 
             if ($msgType === 'button' && $payload) {
-                if (str_starts_with($payload, 'confirmar_')) {
+                if (str_starts_with($payload, 'confirmar_pre_')) {
+                    $agendamentoId = (int) str_replace('confirmar_pre_', '', $payload);
+                    $this->tratarPreConfirmacao($business_phone_number_id, $number, $agendamentoId);
+                } elseif (str_starts_with($payload, 'confirmar_')) {
                     $agendamentoId = (int) str_replace('confirmar_', '', $payload);
                     $this->tratarConfirmacao($business_phone_number_id, $number, $agendamentoId);
                 } elseif (str_starts_with($payload, 'reagendar_')) {
@@ -65,20 +68,17 @@ class WhatsappController extends Controller
 
     // ── Tratamento de respostas de botões ────────────────────────────────────
 
-    private function tratarConfirmacao(string $phoneId, string $number, int $agendamentoId): void
+    // Pré-confirmação: cliente respondeu o lembrete da véspera.
+    private function tratarPreConfirmacao(string $phoneId, string $number, int $agendamentoId): void
     {
         $agendamento = AgendamentoModel::with('user')->find($agendamentoId);
         if (!$agendamento) return;
 
-        $agendamento->confirmado = true;
-        $agendamento->save();
-
-        Aviso::create([
-            'tipo'        => 'confirmacao',
-            'user_id'     => $agendamento->user_id,
-            'servico_id'  => $agendamento->servico_id,
-            'data_antiga' => $agendamento->data_inicio,
-        ]);
+        // Mantém o primeiro horário de pré-confirmação; ignora cliques repetidos.
+        if (!$agendamento->pre_confirmado_em) {
+            $agendamento->pre_confirmado_em = now();
+            $agendamento->save();
+        }
 
         $nome          = ucfirst($agendamento->user->name ?? 'você');
         $nomeComercial = env('WHATSAPP_NOME_COMERCIAL', config('app.name'));
@@ -88,7 +88,34 @@ class WhatsappController extends Controller
         $hora          = Carbon::parse($agendamento->data_inicio)->format('H:i');
 
         self::enviarMsg($phoneId, $number,
-            "Perfeito, {$nome}! ✅ Sua presença está confirmada para o dia *{$data}* às *{$hora}*.\n\nEstamos te esperando na {$nomeComercial}. Até lá! 😊"
+            "Obrigado por confirmar, {$nome}! ✅ Sua presença para o dia *{$data}* às *{$hora}* está pré-confirmada.\n\n"
+            . "No dia da consulta enviaremos uma última confirmação. Até lá! 😊"
+        );
+    }
+
+    // Confirmação oficial: cliente respondeu o lembrete de 2h antes (ou staff confirmou manualmente).
+    private function tratarConfirmacao(string $phoneId, string $number, int $agendamentoId): void
+    {
+        $agendamento = AgendamentoModel::with('user')->find($agendamentoId);
+        if (!$agendamento) return;
+
+        $agendamento->confirmado    = true;
+        $agendamento->confirmado_em = now();
+        $agendamento->save();
+
+        $nome          = ucfirst($agendamento->user->name ?? 'você');
+        $nomeComercial = env('WHATSAPP_NOME_COMERCIAL', config('app.name'));
+        $data          = Carbon::parse($agendamento->data_inicio)
+                             ->locale('pt_BR')
+                             ->translatedFormat('d \d\e F');
+        $hora          = Carbon::parse($agendamento->data_inicio)->format('H:i');
+        $endereco      = env('WHATSAPP_ENDERECO', 'R. 23 de Maio, 790 - Vila Vianelo, Jundiaí - SP, 13207-070');
+        $maps          = env('WHATSAPP_MAPS_LINK', 'https://maps.app.goo.gl/gPbt9ZuejqqJRrA56');
+
+        self::enviarMsg($phoneId, $number,
+            "Perfeito, {$nome}! ✅ Sua presença está confirmada para o dia *{$data}* às *{$hora}*.\n\n"
+            . "Muito obrigado por confirmar! Estamos te esperando na {$nomeComercial}. Até lá! 😊\n\n"
+            . "📍 *Endereço:*\n{$endereco}\n{$maps}"
         );
     }
 

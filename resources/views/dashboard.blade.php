@@ -472,6 +472,17 @@
             </div>
         </div>
 
+        @php
+            // Badge de status de um lembrete: 'enviado' | 'erro' | null (não enviado)
+            $lembreteBadge = function (?string $status, string $titulo): string {
+                [$txt, $cls] = match ($status) {
+                    'enviado' => ['enviado', 'bg-success'],
+                    'erro'    => ['falhou',  'bg-danger'],
+                    default   => ['não enviado', 'bg-secondary'],
+                };
+                return "<span class=\"badge {$cls}\" style=\"font-weight:500\">{$titulo}: {$txt}</span>";
+            };
+        @endphp
         <div class="accordion shadow" id="accordionMeses">
             @foreach ($consultas as $mes => $diasDoMes)
                 @php
@@ -516,6 +527,8 @@
                                                     <div>
                                                         @if($consulta->confirmado)
                                                             <span class="badge bg-success mb-1">✓ Confirmado</span>
+                                                        @elseif($consulta->pre_confirmado_em)
+                                                            <span class="badge bg-info text-dark mb-1">Pré-confirmado</span>
                                                         @elseif($isStaff)
                                                             <span class="badge bg-warning text-dark mb-1">Pendente confirmação</span>
                                                         @else
@@ -524,6 +537,22 @@
                                                         <br>
                                                         <strong>Paciente:</strong> {{ $consulta->user->name }}<br>
                                                         <strong>Serviço:</strong> {{ $consulta->servico->descricao ?? '' }}
+                                                        @if($isStaff)
+                                                            <div class="d-flex flex-wrap gap-1 mt-2" style="font-size:.72rem">
+                                                                {!! $lembreteBadge($consulta->lembrete_24h, 'Véspera') !!}
+                                                                {!! $lembreteBadge($consulta->lembrete_2h, '2h antes') !!}
+                                                            </div>
+                                                            @if($consulta->pre_confirmado_em || $consulta->confirmado_em)
+                                                                <div class="d-flex flex-wrap gap-1 mt-1" style="font-size:.72rem">
+                                                                    @if($consulta->pre_confirmado_em)
+                                                                        <span class="badge bg-info text-dark" style="font-weight:500">Confirmou no dia: {{ $consulta->pre_confirmado_em->format('d/m \à\s H:i') }}</span>
+                                                                    @endif
+                                                                    @if($consulta->confirmado_em)
+                                                                        <span class="badge bg-success" style="font-weight:500">Confirmou na hora: {{ $consulta->confirmado_em->format('d/m \à\s H:i') }}</span>
+                                                                    @endif
+                                                                </div>
+                                                            @endif
+                                                        @endif
                                                     </div>
                                                 </div>
                                                 @if($isStaff)
@@ -531,6 +560,11 @@
                                                         <button class="btn btn-sm btn-success btn-confirmar ms-2"
                                                                 onclick="event.stopPropagation(); confirmarConsulta({{ $consulta->id }})">
                                                             Confirmar
+                                                        </button>
+                                                        <button class="btn btn-sm btn-outline-primary btn-reenviar ms-2"
+                                                                title="Reenviar pedido de confirmação no WhatsApp"
+                                                                onclick="event.stopPropagation(); reenviarLembrete({{ $consulta->id }}, this)">
+                                                            Reenviar pedido de confirmação
                                                         </button>
                                                     @endif
                                                     <button class="btn btn-sm btn-danger ms-2"
@@ -582,6 +616,10 @@
                 user_id: {{ $c->user_id }},
                 servico_id: {{ $c->servico_id }},
                 confirmado: {{ $c->confirmado ? 'true' : 'false' }},
+                pre_confirmado_em: @json($c->pre_confirmado_em),
+                confirmado_em: @json($c->confirmado_em),
+                lembrete_24h: @json($c->lembrete_24h),
+                lembrete_2h: @json($c->lembrete_2h),
                 user: { name: @json($c->user->name) },
                 servico: { descricao: @json($c->servico->descricao ?? '') },
                 data_inicio: @json($c->data_inicio->format('Y-m-d H:i:s')),
@@ -716,6 +754,55 @@
                     }
                 })
                 .catch(() => alert('Erro ao confirmar consulta'));
+        }
+
+        // Badge de status de um lembrete: 'enviado' | 'erro' | null (não enviado)
+        function lembreteBadge(status, titulo) {
+            const mapa = {
+                enviado: ['enviado', 'bg-success'],
+                erro:    ['falhou',  'bg-danger'],
+            };
+            const [txt, cls] = mapa[status] ?? ['não enviado', 'bg-secondary'];
+            return `<span class="badge ${cls}" style="font-weight:500">${titulo}: ${txt}</span>`;
+        }
+
+        // Formata timestamp ISO ("2026-06-02T12:05:00...") em "02/06 às 12:05" (sem conversão de fuso)
+        function fmtConfirma(iso) {
+            if (!iso) return null;
+            return `${iso.substring(8, 10)}/${iso.substring(5, 7)} às ${iso.substring(11, 16)}`;
+        }
+
+        // Badge de status geral de confirmação no card JS
+        function statusConfirmacaoBadge(c) {
+            if (c.confirmado) return '';
+            if (c.pre_confirmado_em) return '<br><span class="badge bg-info text-dark mt-1">Pré-confirmado</span>';
+            return '<br><span class="badge bg-warning text-dark mt-1">Pendente confirmação</span>';
+        }
+
+        // Linha com os momentos de pré-confirmação (véspera) e confirmação oficial (2h)
+        function confirmacaoTimestamps(c) {
+            const pre = fmtConfirma(c.pre_confirmado_em);
+            const ofi = fmtConfirma(c.confirmado_em);
+            if (!pre && !ofi) return '';
+            let h = '<div class="d-flex flex-wrap gap-1 mt-1" style="font-size:.72rem">';
+            if (pre) h += `<span class="badge bg-info text-dark" style="font-weight:500">Confirmou no dia: ${pre}</span>`;
+            if (ofi) h += `<span class="badge bg-success" style="font-weight:500">Confirmou na hora: ${ofi}</span>`;
+            h += '</div>';
+            return h;
+        }
+
+        function reenviarLembrete(id, btn) {
+            const rotulo = 'Reenviar pedido de confirmação';
+            if (btn) { btn.disabled = true; btn.textContent = 'Enviando...'; }
+            axios.post(`/agenda/${id}/reenviar-lembrete`)
+                .then(() => {
+                    if (btn) { btn.textContent = 'Enviado ✓'; }
+                    setTimeout(() => { if (btn) { btn.disabled = false; btn.textContent = rotulo; } }, 2500);
+                })
+                .catch((e) => {
+                    if (btn) { btn.disabled = false; btn.textContent = rotulo; }
+                    alert(e.response?.data?.error ?? 'Erro ao reenviar pedido de confirmação');
+                });
         }
 
         // ── Usuários ─────────────────────────────────────────────────────────
@@ -1136,10 +1223,16 @@
                                     <div>
                                         <strong>Paciente:</strong> ${nomePaciente.textContent}<br>
                                         <strong>Serviço:</strong> ${nomeServico.textContent}
-                                        ${!c.confirmado ? '<br><span class="badge bg-warning text-dark mt-1">Pendente confirmação</span>' : ''}
+                                        ${statusConfirmacaoBadge(c)}
+                                        <div class="d-flex flex-wrap gap-1 mt-2" style="font-size:.72rem">
+                                            ${lembreteBadge(c.lembrete_24h, 'Véspera')}
+                                            ${lembreteBadge(c.lembrete_2h, '2h antes')}
+                                        </div>
+                                        ${confirmacaoTimestamps(c)}
                                     </div>
                                 </div>
                                 ${!c.confirmado ? `<button class="btn btn-sm btn-success btn-confirmar ms-2" onclick="event.stopPropagation(); confirmarConsulta(${c.id})">Confirmar</button>` : ''}
+                                ${!c.confirmado ? `<button class="btn btn-sm btn-outline-primary btn-reenviar ms-2" title="Reenviar pedido de confirmação no WhatsApp" onclick="event.stopPropagation(); reenviarLembrete(${c.id}, this)">Reenviar pedido de confirmação</button>` : ''}
                                 <button class="btn btn-sm btn-danger ms-2"
                                     onclick="event.stopPropagation(); excluirConsultaById(${c.id})">
                                     <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#ffffff"><path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z"/></svg>

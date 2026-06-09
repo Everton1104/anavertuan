@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Controllers\WhatsappController;
 use App\Models\AgendamentoModel;
 use App\Models\Aviso;
+use App\Models\CreditoServico;
 use App\Models\DisponibilidadeModel;
 use App\Models\ServicosModel;
 use App\Models\User;
@@ -58,28 +59,29 @@ class AgendaController extends Controller
         $fim    = Carbon::parse($data . ' 22:00');
 
         while ($cursor < $fim) {
-            $hora        = $cursor->format('H:i');
-            $disponivel  = in_array($hora, $slotsDisponiveis);
-            $agendamento = null;
+            $hora         = $cursor->format('H:i');
+            $disponivel   = in_array($hora, $slotsDisponiveis);
+            $agendamentos = [];
 
             foreach ($consultas as $c) {
                 $inicioC = Carbon::parse($c->data_inicio);
                 $fimC    = Carbon::parse($c->data_fim);
                 if ($cursor >= $inicioC && $cursor < $fimC) {
-                    $agendamento = [
-                        'paciente' => $c->user->name,
-                        'servico'  => $c->servico->descricao ?? '',
-                        'inicio'   => $inicioC->format('H:i'),
-                        'fim'      => $fimC->format('H:i'),
+                    $agendamentos[] = [
+                        'paciente'  => $c->user->name,
+                        'servico'   => $c->servico->descricao ?? '',
+                        'inicio'    => $inicioC->format('H:i'),
+                        'fim'       => $fimC->format('H:i'),
+                        // Serviços de staff são "transparentes": não bloqueiam o slot.
+                        'is_staff'  => !(optional($c->servico)->visivel_cliente),
                     ];
-                    break;
                 }
             }
 
             $slots[] = [
-                'hora'        => $hora,
-                'disponivel'  => $disponivel,
-                'agendamento' => $agendamento,
+                'hora'         => $hora,
+                'disponivel'   => $disponivel,
+                'agendamentos' => $agendamentos,
             ];
 
             $cursor->addMinutes(15);
@@ -141,6 +143,9 @@ class AgendaController extends Controller
             return response()->json(['error' => 'Serviço não disponível'], 403);
         }
 
+        // Serviços de staff podem ser colocados sobre outros horários sem conflitar com eles
+        $servicoEhStaff = !$servico->visivel_cliente;
+
         // Clientes só enxergam slots em :00 e :30
         if (!$isStaff) {
             $slotsDisponiveis = array_values(array_filter(
@@ -150,7 +155,8 @@ class AgendaController extends Controller
         }
 
         $ignoreId  = request('ignore_id');
-        $consultas = AgendamentoModel::whereDate('data_inicio', $data)
+        $consultas = AgendamentoModel::with('servico')
+            ->whereDate('data_inicio', $data)
             ->when($ignoreId, fn($q) => $q->where('id', '!=', $ignoreId))
             ->orderBy('data_inicio')
             ->get();
@@ -190,13 +196,17 @@ class AgendaController extends Controller
             $motivo     = null;
 
             // 1. Slot diretamente ocupado por um agendamento
-            foreach ($consultas as $c) {
-                $inicioC = Carbon::parse($c->data_inicio);
-                $fimC    = Carbon::parse($c->data_fim);
-                if ($inicio >= $inicioC && $inicio < $fimC) {
-                    $ocupado = true;
-                    $motivo  = 'Horário já reservado';
-                    break;
+            // Serviços de staff não conflitam: nem bloqueiam nem são bloqueados por outros agendamentos.
+            if (!$servicoEhStaff) {
+                foreach ($consultas as $c) {
+                    if (!optional($c->servico)->visivel_cliente) continue; // agendamento de staff não bloqueia
+                    $inicioC = Carbon::parse($c->data_inicio);
+                    $fimC    = Carbon::parse($c->data_fim);
+                    if ($inicio >= $inicioC && $inicio < $fimC) {
+                        $ocupado = true;
+                        $motivo  = 'Horário já reservado';
+                        break;
+                    }
                 }
             }
 
@@ -213,8 +223,9 @@ class AgendaController extends Controller
             }
 
             // 3. Duração conflita com outro agendamento?
-            if (!$ocupado) {
+            if (!$ocupado && !$servicoEhStaff) {
                 foreach ($consultas as $c) {
+                    if (!optional($c->servico)->visivel_cliente) continue; // agendamento de staff não bloqueia
                     $inicioC = Carbon::parse($c->data_inicio);
                     $fimC    = Carbon::parse($c->data_fim);
                     if ($inicio < $fimC && $fimTeorico > $inicioC) {
@@ -331,10 +342,13 @@ class AgendaController extends Controller
             }
         }
 
-        $existeConflito = AgendamentoModel::where(function ($q) use ($inicio, $fim) {
+        // Serviços de staff podem ser colocados sobre outros horários sem conflitar.
+        // Demais serviços só conflitam com agendamentos de clientes (os de staff são "transparentes").
+        $existeConflito = $servico->visivel_cliente && AgendamentoModel::where(function ($q) use ($inicio, $fim) {
                 $q->where('data_inicio', '<', $fim)
                   ->where('data_fim', '>', $inicio);
             })
+            ->whereHas('servico', fn($q) => $q->where('visivel_cliente', 1))
             ->when($ignoreId, fn($q) => $q->where('id', '!=', $ignoreId))
             ->exists();
 
@@ -353,6 +367,47 @@ class AgendaController extends Controller
         }
 
         $isEdicao = !empty($ignoreId);
+
+        // Créditos de serviço: ao criar (não na edição), consome 1 unidade do saldo.
+        // Reagendar (edição) não desconta de novo, e cancelar (destroy) devolve
+        // automaticamente (a linha some da contagem de usadas).
+        // - Serviços visíveis ao cliente EXIGEM saldo.
+        // - Serviços de staff são livres; mas se houver saldo contratado, também descontam.
+        if (!$isEdicao) {
+            if ($servico->visivel_cliente) {
+                // Serviço visível: desconta do próprio serviço (exige saldo).
+                $credito = CreditoServico::where('user_id', $request->user_id)
+                    ->where('servico_id', $servico->id)
+                    ->first();
+
+                if (!$credito || $credito->restantes() <= 0) {
+                    return back()
+                        ->withErrors(['servico_id' => 'O cliente não possui saldo disponível para este serviço.'])
+                        ->withInput();
+                }
+
+                $agendamento->credito_servico_id = $servico->id;
+                $agendamento->consome_credito    = true;
+            } else {
+                // Serviço de staff (ex.: Encaixe): pode descontar de outro serviço
+                // contratado pelo cliente, ou ser livre (sem desconto).
+                $alvoId = $request->credito_servico_id;
+                if ($alvoId) {
+                    $credito = CreditoServico::where('user_id', $request->user_id)
+                        ->where('servico_id', $alvoId)
+                        ->first();
+
+                    if (!$credito || $credito->restantes() <= 0) {
+                        return back()
+                            ->withErrors(['servico_id' => 'O serviço escolhido para desconto não possui saldo.'])
+                            ->withInput();
+                    }
+
+                    $agendamento->credito_servico_id = $alvoId;
+                    $agendamento->consome_credito    = true;
+                }
+            }
+        }
 
         $agendamento->user_id     = $request->user_id;
         $agendamento->servico_id  = $servico->id;
@@ -390,6 +445,13 @@ class AgendaController extends Controller
                        ->translatedFormat('d \d\e F \d\e Y');
         $hora    = Carbon::parse($agendamento->data_inicio)->format('H:i');
         $servico = $agendamento->servico->descricao ?? '';
+
+        // Encaixe (serviço de staff) que descontou de outro serviço do cliente:
+        // mostra ao cliente o nome do serviço descontado. Se for cortesia (sem
+        // desconto), mantém o nome original.
+        if ($agendamento->credito_servico_id && $agendamento->credito_servico_id != $agendamento->servico_id) {
+            $servico = optional(ServicosModel::find($agendamento->credito_servico_id))->descricao ?? $servico;
+        }
 
         if ($isEdicao) {
             // confirmacao_reagendamento: nome, nome_comercial, data, hora
@@ -506,6 +568,25 @@ class AgendaController extends Controller
 
         $agendamento->delete();
         return response()->json(['ok' => true]);
+    }
+
+    // Retorna apenas o HTML da lista de avisos (para atualização parcial via axios).
+    public function avisosParcial()
+    {
+        $user = auth()->user();
+        if (!$user->adm && !$user->func) {
+            return response()->json(['error' => 'Não autorizado'], 403);
+        }
+
+        $avisos = Aviso::with(['user', 'servico'])
+            ->whereNull('dispensado_at')
+            ->latest()
+            ->get();
+
+        return response()->json([
+            'count' => $avisos->count(),
+            'html'  => view('partials.avisos', compact('avisos'))->render(),
+        ]);
     }
 
     public function dispensarAviso($id)

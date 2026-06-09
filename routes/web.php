@@ -3,6 +3,7 @@
 use App\Http\Controllers\Agenda\AgendaController;
 use App\Http\Controllers\Agenda\ServicoController;
 use App\Http\Controllers\AplicacoesController;
+use App\Http\Controllers\CreditoServicoController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\WhatsappController;
@@ -51,10 +52,18 @@ Route::post('add-usuario', [RegisteredUserController::class, 'store'])->middlewa
 Route::post('delete-usuario', [RegisteredUserController::class, 'delete'])->middleware('auth')->name('delete-usuario');
 Route::post('editar-usuario', [RegisteredUserController::class, 'editar'])->middleware('auth')->name('editar-usuario');
 Route::get('usuarios-search', [RegisteredUserController::class, 'search'])->middleware('auth')->name('usuarios.search');
+
+// ── Créditos/serviços contratados por cliente (somente staff) ─────────────────
+Route::middleware('auth')->group(function () {
+    Route::get('/api/clientes/{userId}/creditos',              [CreditoServicoController::class, 'index'])->name('creditos.index');
+    Route::post('/clientes/{userId}/creditos',                 [CreditoServicoController::class, 'store'])->name('creditos.store');
+    Route::delete('/clientes/{userId}/creditos/{servicoId}',   [CreditoServicoController::class, 'destroy'])->name('creditos.destroy');
+});
 Route::resource('agenda', AgendaController::class)->middleware('auth');
 Route::post('agenda/{id}/confirmar', [AgendaController::class, 'confirmar'])->middleware('auth')->name('agenda.confirmar');
 Route::post('agenda/{id}/reenviar-lembrete', [AgendaController::class, 'reenviarLembrete'])->middleware('auth')->name('agenda.reenviar-lembrete');
 Route::post('aviso/{id}/dispensar', [AgendaController::class, 'dispensarAviso'])->middleware('auth')->name('aviso.dispensar');
+Route::get('avisos-parcial', [AgendaController::class, 'avisosParcial'])->middleware('auth')->name('avisos.parcial');
 Route::get('agenda-search', [AgendaController::class, 'search'])->name('agenda.search');
 Route::resource('servico', ServicoController::class)->middleware('auth');
 Route::post('delete-servico', [ServicoController::class, 'delete'])->middleware('auth')->name('delete-servico');

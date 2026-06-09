@@ -15,6 +15,8 @@ class AgendamentoModel extends Model
         'data_inicio',
         'data_fim',
         'confirmado',
+        'consome_credito',
+        'credito_servico_id',
         'pre_confirmado_em',
         'confirmado_em',
     ];
@@ -23,9 +25,17 @@ class AgendamentoModel extends Model
         'data_inicio'        => 'datetime',
         'data_fim'           => 'datetime',
         'confirmado'         => 'boolean',
+        'consome_credito'    => 'boolean',
         'pre_confirmado_em'  => 'datetime',
         'confirmado_em'      => 'datetime',
     ];
+
+    // Serializa as datas no horário local (sem conversão p/ UTC) e com espaço,
+    // no formato que o front-end consome (ex.: editarConsulta faz split(' ')).
+    protected function serializeDate(\DateTimeInterface $date): string
+    {
+        return $date->format('Y-m-d H:i:s');
+    }
 
     // Expõe o status de cada lembrete no JSON (consumido pelos cards do dashboard).
     protected $appends = ['lembrete_24h', 'lembrete_2h'];

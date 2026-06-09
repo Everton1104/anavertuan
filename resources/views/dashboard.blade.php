@@ -15,6 +15,9 @@
         .consulta-pendente {
             border-left-color: #ffc107;
         }
+        .consulta-especial {
+            border-left-color: #dc3545;
+        }
         .consulta-data {
             font-weight: bold;
             font-size: 1.1rem;
@@ -86,6 +89,30 @@
                 @else
                     <input type="hidden" name="tipo_edt" value="cli">
                 @endif
+
+                {{-- Serviços contratados (saldo de unidades por serviço) — só para clientes --}}
+                <div id="creditos-section" class="mt-4 d-none">
+                    <hr>
+                    <label class="form-label fw-semibold mb-2">Serviços contratados</label>
+                    <div id="creditos-lista" class="mb-2">
+                        <p class="text-muted small mb-0">Nenhum serviço contratado.</p>
+                    </div>
+                    <div class="row g-2 align-items-end">
+                        <div class="col-7">
+                            <select id="credito-servico" class="form-select form-select-sm">
+                                @foreach($servicos->where('status', 1) as $s)
+                                    <option value="{{ $s->id }}">{{ $s->descricao }}{{ $s->visivel_cliente ? '' : ' [Staff]' }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="col-3">
+                            <input type="number" id="credito-qtd" class="form-control form-control-sm" min="1" value="1" title="Quantidade">
+                        </div>
+                        <div class="col-2">
+                            <button type="button" class="btn btn-sm btn-primary w-100" onclick="adicionarCredito()" title="Adicionar">+</button>
+                        </div>
+                    </div>
+                </div>
             </form>
         </x-app.modal>
 
@@ -253,7 +280,7 @@
                                             @if($servico->visivel_cliente)
                                                 <span class="badge bg-success">Clientes</span>
                                             @else
-                                                <span class="badge bg-secondary">Staff</span>
+                                                <span class="badge bg-danger">Staff</span>
                                             @endif
                                         </td>
                                     </tr>
@@ -337,38 +364,7 @@
             </div>
             <div id="collapseAvisos" class="collapse {{ $avisos->isNotEmpty() ? 'show' : '' }}">
                 <div class="card-body p-3" id="avisos-lista">
-                    @forelse($avisos as $aviso)
-                        <div class="d-flex justify-content-between align-items-start p-2 border-bottom" id="aviso-{{ $aviso->id }}">
-                            <div>
-                                @if($aviso->tipo === 'cancelamento')
-                                    <strong>{{ ucfirst($aviso->user->name) }}</strong> cancelou a consulta de
-                                    <em>{{ $aviso->servico->descricao }}</em> do dia
-                                    {{ $aviso->data_antiga->format('d/m/Y') }} às {{ $aviso->data_antiga->format('H:i') }}.
-                                @elseif($aviso->tipo === 'reagendamento')
-                                    <strong>{{ ucfirst($aviso->user->name) }}</strong> reagendou
-                                    <em>{{ $aviso->servico->descricao }}</em>:
-                                    {{ $aviso->data_antiga->format('d/m/Y H:i') }}
-                                    <strong>→</strong>
-                                    {{ $aviso->data_nova->format('d/m/Y H:i') }}
-                                @elseif($aviso->tipo === 'confirmacao')
-                                    <strong>{{ ucfirst($aviso->user->name) }}</strong> confirmou presença em
-                                    <em>{{ $aviso->servico->descricao }}</em> no dia
-                                    {{ $aviso->data_antiga->format('d/m/Y') }} às {{ $aviso->data_antiga->format('H:i') }}. ✅
-                                @elseif($aviso->tipo === 'reagendamento_solicitado')
-                                    <strong>{{ ucfirst($aviso->user->name) }}</strong> solicitou reagendamento de
-                                    <em>{{ $aviso->servico->descricao }}</em> marcado para
-                                    {{ $aviso->data_antiga->format('d/m/Y') }} às {{ $aviso->data_antiga->format('H:i') }}. 🔄
-                                @endif
-                                <br><small class="text-muted">{{ $aviso->created_at->diffForHumans() }}</small>
-                            </div>
-                            <button class="btn btn-sm btn-outline-secondary ms-3 flex-shrink-0"
-                                    onclick="dispensarAviso({{ $aviso->id }})">
-                                Dispensar
-                            </button>
-                        </div>
-                    @empty
-                        <p class="text-muted mb-0" id="avisos-vazio">Nenhum aviso pendente.</p>
-                    @endforelse
+                    @include('partials.avisos')
                 </div>
             </div>
         </div>
@@ -387,6 +383,13 @@
                     @method('post')
                     <x-app.select label="Cliente" name="user_id" required="true" :options="$clientes->pluck('name', 'id')" />
                     <x-app.select label="Selecione o serviço" name="servico_id" required="true" :options="$servicos->where('status', 1)->mapWithKeys(fn($s) => [$s->id => $s->descricao . ' — ' . substr($s->duracao, 0, 5) . ($s->visivel_cliente ? '' : ' [Staff]')])" />
+                    {{-- Para serviços de staff (ex.: Encaixe): de qual serviço contratado descontar --}}
+                    <div id="credito-alvo-wrap" class="mb-3 d-none">
+                        <label for="credito_servico_id" class="form-label">Descontar de</label>
+                        <select name="credito_servico_id" id="credito_servico_id" class="form-select">
+                            <option value="">Não descontar (encaixe livre)</option>
+                        </select>
+                    </div>
                     <input type="hidden" name="data_inicio" id="data_inicio" />
                     <input type="hidden" name="data_fim" id="data_fim" />
                     <input type="hidden" id="dia_selecionado" name="dia_selecionado">
@@ -429,6 +432,24 @@
                     <x-app.calendar :servicos="$servicos" :is-adm="false" />
                 </form>
             </x-app.modal>
+
+            {{-- Modal: horário especial (staff) — cliente não pode reagendar por aqui --}}
+            <div class="modal fade" id="modal-horario-especial" tabindex="-1">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">Horário especial</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p class="mb-0">Este horário não pode ser reagendado por aqui, pois se trata de um horário especial. Nossa equipe entrará em contato com você para ajustar. 😊</p>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Entendi</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
         @endif
 
         {{-- Modal: ação sobre consulta (reagendar / excluir / dispensar) --}}
@@ -516,13 +537,16 @@
                                     <div id="dia-{{ $dataKey }}" class="collapse {{ $isHoje ? 'show' : '' }} pt-2">
                                         @foreach ($listaDia as $consulta)
                                             @php $isStaff = auth()->user()->adm == 1 || auth()->user()->func == 1; @endphp
-                                            <div class="consulta-card {{ !$consulta->confirmado ? 'consulta-pendente' : '' }} d-flex {{ $isStaff ? 'justify-content-between align-items-center' : 'flex-column' }}" data-consulta-id="{{ $consulta->id }}">
+                                            <div class="consulta-card {{ !$consulta->confirmado ? 'consulta-pendente' : '' }} {{ !optional($consulta->servico)->visivel_cliente ? 'consulta-especial' : '' }} d-flex {{ $isStaff ? 'justify-content-between align-items-center' : 'flex-column' }}" data-consulta-id="{{ $consulta->id }}">
                                                 <div class="d-flex flex-grow-1" @if($isStaff) onclick="editarConsulta({{ $consulta->id }})" style="cursor: pointer" @endif>
                                                     <div class="me-3 text-center">
                                                         <div class="consulta-hora">
                                                             {{ \Carbon\Carbon::parse($consulta->data_inicio)->format('H:i') }} <br>às<br>
                                                             {{ \Carbon\Carbon::parse($consulta->data_fim)->format('H:i') }}
                                                         </div>
+                                                        @if(!optional($consulta->servico)->visivel_cliente)
+                                                            <div class="mt-2"><span class="badge bg-danger">Horário especial</span></div>
+                                                        @endif
                                                     </div>
                                                     <div>
                                                         @if($consulta->confirmado)
@@ -572,19 +596,22 @@
                                                         <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#ffffff"><path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z"/></svg>
                                                     </button>
                                                 @elseif($consulta->data_inicio->isFuture())
+                                                    @php $consultaEhStaff = !(optional($consulta->servico)->visivel_cliente); @endphp
                                                     <div class="d-flex gap-2 mt-3">
                                                         <button class="btn btn-sm btn-outline-primary"
                                                                 data-id="{{ $consulta->id }}"
                                                                 data-servico-id="{{ $consulta->servico_id }}"
                                                                 data-servico-nome="{{ $consulta->servico->descricao ?? '' }}"
-                                                                onclick="reagendarConsulta(this.dataset.id, this.dataset.servicoId, this.dataset.servicoNome)">
+                                                                data-staff="{{ $consultaEhStaff ? '1' : '0' }}"
+                                                                onclick="reagendarConsulta(this.dataset.id, this.dataset.servicoId, this.dataset.servicoNome, this.dataset.staff === '1')">
                                                             Reagendar
                                                         </button>
                                                         <button class="btn btn-sm btn-outline-danger"
                                                                 data-id="{{ $consulta->id }}"
                                                                 data-servico-id="{{ $consulta->servico_id }}"
                                                                 data-servico-nome="{{ $consulta->servico->descricao ?? '' }}"
-                                                                onclick="cancelarConsulta(this.dataset.id, this.dataset.servicoId, this.dataset.servicoNome)">
+                                                                data-staff="{{ $consultaEhStaff ? '1' : '0' }}"
+                                                                onclick="cancelarConsulta(this.dataset.id, this.dataset.servicoId, this.dataset.servicoNome, this.dataset.staff === '1')">
                                                             Cancelar
                                                         </button>
                                                     </div>
@@ -635,7 +662,7 @@
         function abrirNovoAgendamento() {
             document.getElementById('agendamento_id').value = '';
             document.getElementById('user_id').value = '';
-            document.getElementById('servico_id').value = '';
+            popularSelectServicos('');
             document.getElementById('dia_selecionado').value = '';
             document.getElementById('hora_selecionada').value = '';
             document.getElementById('data_inicio').value = '';
@@ -654,7 +681,6 @@
                     const c = res.data;
 
                     document.getElementById('user_id').value       = c.user_id;
-                    document.getElementById('servico_id').value    = c.servico_id;
                     document.getElementById('agendamento_id').value = c.id;
                     document.getElementById('dia_selecionado').value = c.data_inicio.split(' ')[0];
                     document.getElementById('hora_selecionada').value = c.data_inicio.split(' ')[1].substring(0, 5);
@@ -664,16 +690,19 @@
                     // Navegar o calendário para o mês da consulta
                     dataAtual = new Date(c.data_inicio.replace(' ', 'T'));
 
-                    new bootstrap.Modal(document.getElementById('modal-add-agenda')).show();
+                    // Carrega os serviços do cliente (forçando o serviço atual) antes de abrir
+                    popularSelectServicos(c.user_id, c.servico_id, () => {
+                        new bootstrap.Modal(document.getElementById('modal-add-agenda')).show();
 
-                    carregarMes().then(() => {
-                        const diaNumero = parseInt(c.data_inicio.split(' ')[0].split('-')[2]);
-                        document.querySelectorAll('.cal-dia').forEach(d => {
-                            if (parseInt(d.textContent) === diaNumero && !d.classList.contains('disabled')) {
-                                d.classList.add('cal-selecionado');
-                            }
+                        carregarMes().then(() => {
+                            const diaNumero = parseInt(c.data_inicio.split(' ')[0].split('-')[2]);
+                            document.querySelectorAll('.cal-dia').forEach(d => {
+                                if (parseInt(d.textContent) === diaNumero && !d.classList.contains('disabled')) {
+                                    d.classList.add('cal-selecionado');
+                                }
+                            });
+                            getHoras(c.data_inicio.split(' ')[0]);
                         });
-                        getHoras(c.data_inicio.split(' ')[0]);
                     });
                 });
         }
@@ -832,8 +861,205 @@
                 $('#tipo_edt_cli').prop('checked', true);
             }
 
+            // Serviços contratados só fazem sentido para clientes
+            const ehCliente = user.adm != 1 && user.func != 1;
+            const secCreditos = document.getElementById('creditos-section');
+            if (ehCliente) {
+                secCreditos.classList.remove('d-none');
+                carregarCreditos(id);
+            } else {
+                secCreditos.classList.add('d-none');
+            }
+
             $('#modal-edt-usuario').modal('show');
         }
+
+        // ── Serviços contratados (créditos) ──────────────────────────────────
+        function carregarCreditos(userId) {
+            axios.get(`/api/clientes/${userId}/creditos`)
+                .then(res => renderCreditos(res.data))
+                .catch(() => {
+                    document.getElementById('creditos-lista').innerHTML =
+                        '<p class="text-danger small mb-0">Falha ao carregar serviços contratados.</p>';
+                });
+        }
+
+        function renderCreditos(lista) {
+            const box = document.getElementById('creditos-lista');
+            if (!lista || lista.length === 0) {
+                box.innerHTML = '<p class="text-muted small mb-0">Nenhum serviço contratado.</p>';
+                return;
+            }
+            box.innerHTML = lista.map(c => `
+                <div class="d-flex align-items-center justify-content-between border rounded px-2 py-1 mb-1">
+                    <span class="small">
+                        ${c.descricao}
+                        <span class="badge bg-secondary">${c.usadas}/${c.quantidade} usadas</span>
+                        <span class="badge ${c.restantes > 0 ? 'bg-success' : 'bg-danger'}">resta ${c.restantes}</span>
+                    </span>
+                    <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2" onclick="removerCredito(${c.servico_id})" title="Remover">&times;</button>
+                </div>`).join('');
+        }
+
+        function adicionarCredito() {
+            const userId     = document.getElementById('edt-id').value;
+            const servico_id = document.getElementById('credito-servico').value;
+            const quantidade = parseInt(document.getElementById('credito-qtd').value) || 1;
+            if (!userId || !servico_id) return;
+            axios.post(`/clientes/${userId}/creditos`, { servico_id, quantidade })
+                .then(() => {
+                    document.getElementById('credito-qtd').value = 1;
+                    carregarCreditos(userId);
+                })
+                .catch(err => alert(err.response?.data?.message ?? 'Erro ao adicionar serviço.'));
+        }
+
+        function removerCredito(servicoId) {
+            const userId = document.getElementById('edt-id').value;
+            if (!userId) return;
+            if (!confirm('Remover este serviço contratado do cliente?')) return;
+            axios.delete(`/clientes/${userId}/creditos/${servicoId}`)
+                .then(() => carregarCreditos(userId))
+                .catch(() => alert('Erro ao remover serviço.'));
+        }
+
+        // Créditos do cliente atualmente carregados (para o campo "Descontar de").
+        let creditosClienteAtual = [];
+
+        // Popula o select de serviço do Novo Agendamento conforme o saldo do cliente.
+        // forcarServicoId garante que um serviço já agendado (edição) apareça mesmo sem saldo.
+        function popularSelectServicos(userId, forcarServicoId, cb) {
+            const sel = document.getElementById('servico_id');
+            if (!sel) { if (cb) cb(); return; }
+            if (!userId) {
+                sel.innerHTML = '<option value="">Selecione o cliente primeiro</option>';
+                if (cb) cb();
+                return;
+            }
+            axios.get(`/api/clientes/${userId}/creditos`).then(res => {
+                creditosClienteAtual = res.data;
+
+                let opts = '<option value="">Selecione o serviço</option>';
+
+                // Serviços visíveis: só aparecem se tiverem saldo (com contador)
+                res.data.filter(c => c.restantes > 0).forEach(c => {
+                    const s = SERVICOS.find(x => x.id == c.servico_id);
+                    if (s && !s.visivel_cliente) return; // staff é tratado abaixo (evita duplicar)
+                    opts += `<option value="${c.servico_id}">${c.descricao} (${c.usadas + 1}/${c.quantidade})</option>`;
+                });
+
+                // Serviços de staff (internos): sempre disponíveis (livres ou descontando de outro)
+                SERVICOS.filter(s => !s.visivel_cliente && s.status == 1).forEach(s => {
+                    opts += `<option value="${s.id}">${s.descricao} [Staff]</option>`;
+                });
+                if (forcarServicoId && !opts.includes(`value="${forcarServicoId}"`)) {
+                    const s = SERVICOS.find(x => x.id == forcarServicoId);
+                    if (s) opts += `<option value="${forcarServicoId}">${s.descricao}</option>`;
+                }
+                sel.innerHTML = opts;
+                if (forcarServicoId) sel.value = forcarServicoId;
+                atualizarCreditoAlvo();
+                if (cb) cb();
+            }).catch(() => { creditosClienteAtual = []; atualizarCreditoAlvo(); if (cb) cb(); });
+        }
+
+        // Para serviços de staff (ex.: Encaixe), mostra "Descontar de" com os serviços
+        // contratados do cliente que ainda têm saldo.
+        function atualizarCreditoAlvo() {
+            const wrap = document.getElementById('credito-alvo-wrap');
+            const alvo = document.getElementById('credito_servico_id');
+            if (!wrap || !alvo) return;
+            const servId = document.getElementById('servico_id').value;
+            const s = SERVICOS.find(x => x.id == servId);
+            const ehStaff = s && !s.visivel_cliente;
+            if (!ehStaff) {
+                wrap.classList.add('d-none');
+                alvo.value = '';
+                return;
+            }
+            const disponiveis = creditosClienteAtual.filter(c => c.restantes > 0);
+            let opts = '<option value="">Não descontar (encaixe livre)</option>';
+            disponiveis.forEach(c => {
+                opts += `<option value="${c.servico_id}">${c.descricao} (${c.usadas + 1}/${c.quantidade})</option>`;
+            });
+            alvo.innerHTML = opts;
+            // Pré-seleciona o 1º serviço com saldo (caso mais comum); o funcionário
+            // pode trocar para "Não descontar" quando for cortesia.
+            alvo.value = disponiveis.length ? String(disponiveis[0].servico_id) : '';
+            wrap.classList.remove('d-none');
+        }
+
+        // Ao trocar o cliente no Novo Agendamento, recarrega os serviços disponíveis (com saldo).
+        document.getElementById('user_id')?.addEventListener('change', function () {
+            popularSelectServicos(this.value);
+            document.getElementById('horarios').innerHTML = '';
+            document.getElementById('horarios-erro').textContent = '';
+            document.querySelectorAll('.cal-dia').forEach(d => d.classList.remove('cal-selecionado'));
+            document.getElementById('dia_selecionado').value  = '';
+            document.getElementById('hora_selecionada').value = '';
+            document.getElementById('data_inicio').value      = '';
+            document.getElementById('data_fim').value         = '';
+        });
+
+        // Ao trocar o serviço, atualiza o campo "Descontar de"
+        document.getElementById('servico_id')?.addEventListener('change', atualizarCreditoAlvo);
+
+        // ── Auto-atualização parcial (só funcionário/adm) ────────────────────
+        // Atualiza avisos e consultas via axios (sem recarregar a página), para
+        // não perder dados de um cadastro/edição em andamento.
+        function atualizarBadgeAvisos(count) {
+            const header = document.querySelector('[data-bs-target="#collapseAvisos"]');
+            if (!header) return;
+            let badge = header.querySelector('.badge');
+            if (count > 0) {
+                if (!badge) {
+                    badge = document.createElement('span');
+                    badge.className = 'badge bg-warning text-dark';
+                    header.appendChild(badge);
+                }
+                badge.textContent = count;
+            } else if (badge) {
+                badge.remove();
+            }
+        }
+
+        function atualizarAvisos() {
+            axios.get('/avisos-parcial')
+                .then(res => {
+                    const lista = document.getElementById('avisos-lista');
+                    if (lista && typeof res.data.html === 'string') lista.innerHTML = res.data.html;
+                    atualizarBadgeAvisos(res.data.count ?? 0);
+                })
+                .catch(() => {});
+        }
+
+        function atualizarConsultas() {
+            // não mexe enquanto o funcionário digita no filtro
+            if (document.activeElement === document.getElementById('search-consulta')) return;
+            const termo = document.getElementById('search-consulta')?.value ?? '';
+            axios.get('/agenda-search', { params: { q: termo } })
+                .then(res => {
+                    // preserva os acordeões (mês/dia) que estavam abertos
+                    const abertos = new Set();
+                    document.querySelectorAll('#accordionMeses .collapse.show').forEach(el => abertos.add(el.id));
+                    renderAccordionConsultas(res.data);
+                    abertos.forEach(id => {
+                        const el = document.getElementById(id);
+                        if (el) {
+                            el.classList.add('show');
+                            const btn = document.querySelector(`[data-bs-target="#${id}"]`);
+                            if (btn) btn.classList.remove('collapsed');
+                        }
+                    });
+                })
+                .catch(() => {});
+        }
+
+        // A cada 30s: atualização parcial, não destrói formulários/modais abertos.
+        setInterval(function () {
+            atualizarAvisos();
+            atualizarConsultas();
+        }, 30000);
 
         let searchUsuarioTimeout = null;
         let searchUsuarioTermoAtual = '';
@@ -1071,11 +1297,12 @@
 
             slots.forEach(slot => {
                 const id      = `mgm-slot-${slot.hora.replace(':', '-')}`;
-                const agend   = slot.agendamento;
-                const bloqueadoPorAgend = !!agend;
+                const agends  = slot.agendamentos ?? [];
+                // Serviços de staff são "transparentes": não bloqueiam a disponibilidade do slot.
+                const bloqueadoPorAgend = agends.some(a => !a.is_staff);
 
                 const row = document.createElement('div');
-                row.className = 'slot-row d-flex align-items-center py-2 border-bottom';
+                row.className = 'slot-row d-flex align-items-center py-2 border-bottom flex-wrap';
                 row.style.minHeight = '44px';
 
                 const check = document.createElement('input');
@@ -1096,13 +1323,13 @@
                 row.appendChild(check);
                 row.appendChild(label);
 
-                if (agend) {
+                agends.forEach(agend => {
                     const badge = document.createElement('span');
-                    badge.className   = 'badge bg-success text-wrap text-start';
+                    badge.className   = `badge ${agend.is_staff ? 'bg-danger' : 'bg-success'} text-wrap text-start me-1`;
                     badge.style.fontSize = '0.8rem';
                     badge.textContent = `${agend.paciente} — ${agend.servico} (${agend.inicio}–${agend.fim})`;
                     row.appendChild(badge);
-                }
+                });
 
                 container.appendChild(row);
             });
@@ -1215,10 +1442,11 @@
                         nomeServico.textContent = c.servico?.descricao ?? '';
 
                         html += `
-                            <div class="consulta-card ${c.confirmado ? '' : 'consulta-pendente'} d-flex justify-content-between align-items-center" data-consulta-id="${c.id}">
+                            <div class="consulta-card ${c.confirmado ? '' : 'consulta-pendente'} ${(c.servico && !c.servico.visivel_cliente) ? 'consulta-especial' : ''} d-flex justify-content-between align-items-center" data-consulta-id="${c.id}">
                                 <div class="d-flex flex-grow-1" onclick="editarConsulta(${c.id})" style="cursor:pointer">
                                     <div class="me-3 text-center">
                                         <div class="consulta-hora">${inicio} <br>às<br> ${fim}</div>
+                                        ${(c.servico && !c.servico.visivel_cliente) ? '<div class="mt-2"><span class="badge bg-danger">Horário especial</span></div>' : ''}
                                     </div>
                                     <div>
                                         <strong>Paciente:</strong> ${nomePaciente.textContent}<br>
@@ -1267,11 +1495,15 @@
             new bootstrap.Modal(document.getElementById('modal-reagendar')).show();
         }
 
-        function reagendarConsulta(id, servicoId, servicoNome) {
+        function reagendarConsulta(id, servicoId, servicoNome, ehStaff) {
+            if (ehStaff) {
+                new bootstrap.Modal(document.getElementById('modal-horario-especial')).show();
+                return;
+            }
             abrirModalAgendamento(id, servicoId, servicoNome);
         }
 
-        function cancelarConsulta(id, servicoId, servicoNome) {
+        function cancelarConsulta(id, servicoId, servicoNome, ehStaff) {
             document.getElementById('modal-acao-titulo').textContent = 'O que deseja fazer?';
             document.getElementById('modal-acao-info').textContent   = 'Você pode reagendar para outro horário ou cancelar definitivamente.';
             document.getElementById('btn-acao-reagendar').textContent = 'Reagendar';
@@ -1281,7 +1513,7 @@
 
             document.getElementById('btn-acao-reagendar').onclick = () => {
                 modalAcao.hide();
-                reagendarConsulta(id, servicoId, servicoNome);
+                reagendarConsulta(id, servicoId, servicoNome, ehStaff);
             };
 
             document.getElementById('btn-acao-excluir').onclick = () => {

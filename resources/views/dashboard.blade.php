@@ -712,7 +712,7 @@
                     dataAtual = new Date(c.data_inicio.replace(' ', 'T'));
 
                     // Carrega os serviços do cliente (forçando o serviço/pacote atual) antes de abrir
-                    popularSelectServicos(c.user_id, { servicoId: c.servico_id, creditoId: c.credito_servico_id }, () => {
+                    popularSelectServicos(c.user_id, { servicoId: c.servico_id, creditoId: c.credito_servico_id, ordinal: c.credito_ordinal }, () => {
                         new bootstrap.Modal(document.getElementById('modal-add-agenda')).show();
 
                         carregarMes().then(() => {
@@ -1024,16 +1024,18 @@
                 creditosClienteAtual = res.data;
                 const comSaldo = res.data.filter(c => c.restantes > 0);
 
+                // O número exibido é a PRÓXIMA unidade a consumir (1ª, 2ª, ... de N),
+                // ou seja usadas+1 — coerente com o que o card mostrará após agendar.
                 // Select de serviço comum: pacotes de serviços visíveis com saldo
                 let opts = '<option value="">Selecione o serviço</option>';
                 comSaldo.filter(c => c.visivel_cliente).forEach(c => {
-                    opts += `<option value="c-${c.id}">${c.descricao} (${c.restantes}/${c.quantidade})</option>`;
+                    opts += `<option value="c-${c.id}">${c.descricao} (${c.usadas + 1}/${c.quantidade})</option>`;
                 });
 
                 // "Descontar de": qualquer pacote com saldo (de qualquer serviço) + encaixe livre
                 let optsAlvo = '<option value="">Não descontar (encaixe livre)</option>';
                 comSaldo.forEach(c => {
-                    optsAlvo += `<option value="${c.id}">${c.descricao} (${c.restantes}/${c.quantidade})</option>`;
+                    optsAlvo += `<option value="${c.id}">${c.descricao} (${c.usadas + 1}/${c.quantidade})</option>`;
                 });
 
                 // Edição: o agendamento é especial se o serviço for o serviço staff
@@ -1041,18 +1043,24 @@
                 const ehEspecial = forcar && forcar.servicoId && esp
                     && String(forcar.servicoId) === String(esp.id);
 
+                // Em edição o pacote pode já estar esgotado por ESTA consulta; usa o
+                // ordinal real da consulta (vindo do backend) em vez de usadas+1.
+                const ordForcado = c => (forcar && forcar.ordinal)
+                    ? forcar.ordinal
+                    : Math.min(c.usadas + 1, c.quantidade);
+
                 // Comum em edição: garante a opção do pacote atual mesmo sem saldo
                 if (forcar && forcar.servicoId && !ehEspecial && forcar.creditoId
                     && !opts.includes(`value="c-${forcar.creditoId}"`)) {
                     const c = creditosClienteAtual.find(x => x.id == forcar.creditoId);
                     const s = SERVICOS.find(x => x.id == forcar.servicoId);
-                    const label = c ? `${c.descricao} (${c.restantes}/${c.quantidade})` : (s ? s.descricao : 'Serviço atual');
+                    const label = c ? `${c.descricao} (${ordForcado(c)}/${c.quantidade})` : (s ? s.descricao : 'Serviço atual');
                     opts += `<option value="c-${forcar.creditoId}">${label}</option>`;
                 }
                 // Especial em edição que descontava de um pacote: garante a opção no "Descontar de"
                 if (ehEspecial && forcar.creditoId && !optsAlvo.includes(`value="${forcar.creditoId}"`)) {
                     const c = creditosClienteAtual.find(x => x.id == forcar.creditoId);
-                    const label = c ? `${c.descricao} (${c.restantes}/${c.quantidade})` : 'Pacote atual';
+                    const label = c ? `${c.descricao} (${ordForcado(c)}/${c.quantidade})` : 'Pacote atual';
                     optsAlvo += `<option value="${forcar.creditoId}">${label}</option>`;
                 }
 

@@ -40,4 +40,16 @@ class CreditoServico extends Model
     {
         return max(0, $this->quantidade - $this->usadas());
     }
+
+    // Posição (1-based) de um agendamento dentro do pacote: a 1ª consulta é 1,
+    // a 2ª é 2, ... — usado para exibir "Serviço X (2/5)". Reusa a relação já
+    // carregada (evita N+1) e cai para consulta avulsa quando não há eager load.
+    public function ordinalDe(AgendamentoModel $agendamento): int
+    {
+        $ags = $this->relationLoaded('agendamentos')
+            ? $this->agendamentos
+            : $this->agendamentos()->get(['id', 'credito_servico_id']);
+
+        return $ags->where('id', '<=', $agendamento->id)->count();
+    }
 }

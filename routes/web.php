@@ -28,7 +28,7 @@ Route::get('/dashboard', function () {
         'user',
         'servico',
         'lembretes',
-        'creditoServico' => fn($q) => $q->with('servico')->withCount('agendamentos'),
+        'creditoServico' => fn($q) => $q->with(['servico', 'agendamentos:id,credito_servico_id'])->withCount('agendamentos'),
     ])->orderBy('data_inicio');
 
     if (!$user->adm && !$user->func) {

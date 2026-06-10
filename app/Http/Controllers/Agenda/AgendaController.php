@@ -47,7 +47,12 @@ class AgendaController extends Controller
             ->map(fn($h) => substr($h, 0, 5))
             ->toArray();
 
-        $consultas = AgendamentoModel::with(['user', 'servico', 'creditoServico.servico'])
+        $consultas = AgendamentoModel::with([
+                'user',
+                'servico',
+                'creditoServico.servico',
+                'creditoServico.agendamentos:id,credito_servico_id',
+            ])
             ->whereDate('data_inicio', $data)
             ->orderBy('data_inicio')
             ->get();
@@ -453,7 +458,7 @@ class AgendaController extends Controller
             if ($credito->servico_id != $agendamento->servico_id) {
                 $servico = $credito->servico->descricao ?? $servico;
             }
-            $servico .= ' (' . $credito->restantes() . '/' . $credito->quantidade . ')';
+            $servico .= ' (' . $credito->ordinalDe($agendamento) . '/' . $credito->quantidade . ')';
         }
 
         if ($isEdicao) {
@@ -539,13 +544,20 @@ class AgendaController extends Controller
     public function edit($id)
     {
         $user        = auth()->user();
-        $agendamento = AgendamentoModel::findOrFail($id);
+        $agendamento = AgendamentoModel::with('creditoServico.agendamentos:id,credito_servico_id')->findOrFail($id);
 
         if (!$user->adm && !$user->func && $agendamento->user_id !== $user->id) {
             abort(403);
         }
 
-        return $agendamento;
+        // Inclui o ordinal desta consulta no pacote, para o select reabrir com o
+        // número correto mesmo quando o pacote já está esgotado por ela.
+        $data = $agendamento->toArray();
+        $data['credito_ordinal'] = $agendamento->creditoServico
+            ? $agendamento->creditoServico->ordinalDe($agendamento)
+            : null;
+
+        return $data;
     }
 
     public function destroy($id)
@@ -641,7 +653,7 @@ class AgendaController extends Controller
                 'user',
                 'servico',
                 'lembretes',
-                'creditoServico' => fn($q) => $q->with('servico')->withCount('agendamentos'),
+                'creditoServico' => fn($q) => $q->with(['servico', 'agendamentos:id,credito_servico_id'])->withCount('agendamentos'),
             ])
             ->when($q !== '', fn($query) =>
                 $query->whereHas('user', fn($u) => $u->where('name', 'like', "%{$q}%"))

@@ -64,8 +64,8 @@ class AgendamentoModel extends Model
         return $this->belongsTo(CreditoServico::class, 'credito_servico_id');
     }
 
-    // Nome de exibição do serviço com o saldo do pacote: "Serviço X (2/5)".
-    // Especial que desconta de outro serviço: "especial - Serviço X (2/5)".
+    // Nome de exibição do serviço com a posição da consulta no pacote: "Serviço X (2/5)"
+    // = 2ª consulta de 5. Especial que desconta de outro serviço: "especial - Serviço X (2/5)".
     public function getServicoDisplayAttribute(): string
     {
         $nome    = $this->servico->descricao ?? '';
@@ -75,7 +75,7 @@ class AgendamentoModel extends Model
             if ($credito->servico_id != $this->servico_id) {
                 $nome .= ' - ' . ($credito->servico->descricao ?? '');
             }
-            $nome .= ' (' . $credito->restantes() . '/' . $credito->quantidade . ')';
+            $nome .= ' (' . $credito->ordinalDe($this) . '/' . $credito->quantidade . ')';
         }
 
         return $nome;

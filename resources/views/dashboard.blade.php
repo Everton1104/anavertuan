@@ -524,6 +524,20 @@
                 };
                 return "<span class=\"badge {$cls}\" style=\"font-weight:500\">{$titulo}: {$txt}</span>";
             };
+            // Uma linha "lembrete → confirmação": o badge do lembrete e uma seta apontando
+            // para o resultado. Se já confirmou, mostra o momento (azul/verde); se o lembrete
+            // foi enviado mas ainda não confirmou, mostra "aguardando confirmação" (cinza).
+            $confirmaLinha = function (string $badge, $em, string $rotulo, string $cls, ?string $status): string {
+                $linha = '<div class="d-flex align-items-center gap-1 flex-wrap" style="font-size:.72rem">' . $badge;
+                if ($em) {
+                    $linha .= '<span class="text-muted">→</span>'
+                        . '<span class="badge ' . $cls . '" style="font-weight:500">' . $rotulo . ' ' . $em->format('d/m \à\s H:i') . '</span>';
+                } elseif ($status === 'enviado') {
+                    $linha .= '<span class="text-muted">→</span>'
+                        . '<span class="badge bg-secondary" style="font-weight:500">aguardando confirmação</span>';
+                }
+                return $linha . '</div>';
+            };
         @endphp
         <div class="accordion shadow" id="accordionMeses">
             @foreach ($consultas as $mes => $diasDoMes)
@@ -583,20 +597,14 @@
                                                         <strong>Paciente:</strong> {{ $consulta->user->name }}<br>
                                                         <strong>Serviço:</strong> {{ $consulta->servico_display }}
                                                         @if($isStaff)
-                                                            <div class="d-flex flex-wrap gap-1 mt-2" style="font-size:.72rem">
-                                                                {!! $lembreteBadge($consulta->lembrete_24h, 'Véspera', $consulta->pre_confirmado_em ? 'bg-info text-dark' : 'bg-success') !!}
-                                                                {!! $lembreteBadge($consulta->lembrete_2h, '2h antes') !!}
+                                                            <div class="d-flex flex-column gap-1 mt-2">
+                                                                {!! $confirmaLinha(
+                                                                    $lembreteBadge($consulta->lembrete_24h, 'Véspera', $consulta->pre_confirmado_em ? 'bg-info text-dark' : 'bg-success'),
+                                                                    $consulta->pre_confirmado_em, 'Pré-confirmou em:', 'bg-info text-dark', $consulta->lembrete_24h) !!}
+                                                                {!! $confirmaLinha(
+                                                                    $lembreteBadge($consulta->lembrete_2h, '2h antes'),
+                                                                    $consulta->confirmado_em, 'Confirmou em:', 'bg-success', $consulta->lembrete_2h) !!}
                                                             </div>
-                                                            @if($consulta->pre_confirmado_em || $consulta->confirmado_em)
-                                                                <div class="d-flex flex-wrap gap-1 mt-1" style="font-size:.72rem">
-                                                                    @if($consulta->pre_confirmado_em)
-                                                                        <span class="badge bg-info text-dark" style="font-weight:500">Pré-confirmou em: {{ $consulta->pre_confirmado_em->format('d/m \à\s H:i') }}</span>
-                                                                    @endif
-                                                                    @if($consulta->confirmado_em)
-                                                                        <span class="badge bg-success" style="font-weight:500">Confirmou em: {{ $consulta->confirmado_em->format('d/m \à\s H:i') }}</span>
-                                                                    @endif
-                                                                </div>
-                                                            @endif
                                                         @endif
                                                     </div>
                                                 </div>
@@ -830,16 +838,16 @@
             return '<span class="badge bg-warning text-dark mb-1">Pendente confirmação</span><br>';
         }
 
-        // Linha com os momentos de pré-confirmação (véspera) e confirmação oficial (2h)
-        function confirmacaoTimestamps(c) {
-            const pre = fmtConfirma(c.pre_confirmado_em);
-            const ofi = fmtConfirma(c.confirmado_em);
-            if (!pre && !ofi) return '';
-            let h = '<div class="d-flex flex-wrap gap-1 mt-1" style="font-size:.72rem">';
-            if (pre) h += `<span class="badge bg-info text-dark" style="font-weight:500">Pré-confirmou em: ${pre}</span>`;
-            if (ofi) h += `<span class="badge bg-success" style="font-weight:500">Confirmou em: ${ofi}</span>`;
-            h += '</div>';
-            return h;
+        // Uma linha "lembrete → confirmação" (espelha o $confirmaLinha do servidor)
+        function confirmaLinha(badge, iso, rotulo, cls, status) {
+            const em = fmtConfirma(iso);
+            let h = `<div class="d-flex align-items-center gap-1 flex-wrap" style="font-size:.72rem">${badge}`;
+            if (em) {
+                h += `<span class="text-muted">→</span><span class="badge ${cls}" style="font-weight:500">${rotulo} ${em}</span>`;
+            } else if (status === 'enviado') {
+                h += '<span class="text-muted">→</span><span class="badge bg-secondary" style="font-weight:500">aguardando confirmação</span>';
+            }
+            return h + '</div>';
         }
 
         function reenviarLembrete(id, btn) {
@@ -1564,11 +1572,10 @@
                                         ${statusConfirmacaoBadge(c)}
                                         <strong>Paciente:</strong> ${nomePaciente.textContent}<br>
                                         <strong>Serviço:</strong> ${nomeServico.textContent}
-                                        <div class="d-flex flex-wrap gap-1 mt-2" style="font-size:.72rem">
-                                            ${lembreteBadge(c.lembrete_24h, 'Véspera', c.pre_confirmado_em ? 'bg-info text-dark' : 'bg-success')}
-                                            ${lembreteBadge(c.lembrete_2h, '2h antes')}
+                                        <div class="d-flex flex-column gap-1 mt-2">
+                                            ${confirmaLinha(lembreteBadge(c.lembrete_24h, 'Véspera', c.pre_confirmado_em ? 'bg-info text-dark' : 'bg-success'), c.pre_confirmado_em, 'Pré-confirmou em:', 'bg-info text-dark', c.lembrete_24h)}
+                                            ${confirmaLinha(lembreteBadge(c.lembrete_2h, '2h antes'), c.confirmado_em, 'Confirmou em:', 'bg-success', c.lembrete_2h)}
                                         </div>
-                                        ${confirmacaoTimestamps(c)}
                                     </div>
                                 </div>
                                 ${!c.confirmado ? `<button class="btn btn-sm btn-success btn-confirmar ms-2" onclick="event.stopPropagation(); confirmarConsulta(${c.id})">Confirmar</button>` : ''}

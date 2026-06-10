@@ -495,9 +495,10 @@
 
         @php
             // Badge de status de um lembrete: 'enviado' | 'erro' | null (não enviado)
-            $lembreteBadge = function (?string $status, string $titulo): string {
+            // $clsEnviado permite trocar a cor do "enviado" (ex.: azul na véspera pré-confirmada)
+            $lembreteBadge = function (?string $status, string $titulo, string $clsEnviado = 'bg-success'): string {
                 [$txt, $cls] = match ($status) {
-                    'enviado' => ['enviado', 'bg-success'],
+                    'enviado' => ['enviado', $clsEnviado],
                     'erro'    => ['falhou',  'bg-danger'],
                     default   => ['não enviado', 'bg-secondary'],
                 };
@@ -560,19 +561,19 @@
                                                         @endif
                                                         <br>
                                                         <strong>Paciente:</strong> {{ $consulta->user->name }}<br>
-                                                        <strong>Serviço:</strong> {{ $consulta->servico->descricao ?? '' }}
+                                                        <strong>Serviço:</strong> {{ $consulta->servico->descricao ?? '' }}@if($consulta->credito_servico_id && $consulta->credito_servico_id != $consulta->servico_id && $consulta->creditoServico) - {{ $consulta->creditoServico->descricao }}@endif
                                                         @if($isStaff)
                                                             <div class="d-flex flex-wrap gap-1 mt-2" style="font-size:.72rem">
-                                                                {!! $lembreteBadge($consulta->lembrete_24h, 'Véspera') !!}
+                                                                {!! $lembreteBadge($consulta->lembrete_24h, 'Véspera', $consulta->pre_confirmado_em ? 'bg-info text-dark' : 'bg-success') !!}
                                                                 {!! $lembreteBadge($consulta->lembrete_2h, '2h antes') !!}
                                                             </div>
                                                             @if($consulta->pre_confirmado_em || $consulta->confirmado_em)
                                                                 <div class="d-flex flex-wrap gap-1 mt-1" style="font-size:.72rem">
                                                                     @if($consulta->pre_confirmado_em)
-                                                                        <span class="badge bg-info text-dark" style="font-weight:500">Confirmou no dia: {{ $consulta->pre_confirmado_em->format('d/m \à\s H:i') }}</span>
+                                                                        <span class="badge bg-info text-dark" style="font-weight:500">Pré-confirmou em: {{ $consulta->pre_confirmado_em->format('d/m \à\s H:i') }}</span>
                                                                     @endif
                                                                     @if($consulta->confirmado_em)
-                                                                        <span class="badge bg-success" style="font-weight:500">Confirmou na hora: {{ $consulta->confirmado_em->format('d/m \à\s H:i') }}</span>
+                                                                        <span class="badge bg-success" style="font-weight:500">Confirmou em: {{ $consulta->confirmado_em->format('d/m \à\s H:i') }}</span>
                                                                     @endif
                                                                 </div>
                                                             @endif
@@ -786,9 +787,10 @@
         }
 
         // Badge de status de um lembrete: 'enviado' | 'erro' | null (não enviado)
-        function lembreteBadge(status, titulo) {
+        // clsEnviado permite trocar a cor do "enviado" (ex.: azul na véspera pré-confirmada)
+        function lembreteBadge(status, titulo, clsEnviado = 'bg-success') {
             const mapa = {
-                enviado: ['enviado', 'bg-success'],
+                enviado: ['enviado', clsEnviado],
                 erro:    ['falhou',  'bg-danger'],
             };
             const [txt, cls] = mapa[status] ?? ['não enviado', 'bg-secondary'];
@@ -801,11 +803,11 @@
             return `${iso.substring(8, 10)}/${iso.substring(5, 7)} às ${iso.substring(11, 16)}`;
         }
 
-        // Badge de status geral de confirmação no card JS
+        // Badge de status geral de confirmação no card JS (espelha o render do servidor)
         function statusConfirmacaoBadge(c) {
-            if (c.confirmado) return '';
-            if (c.pre_confirmado_em) return '<br><span class="badge bg-info text-dark mt-1">Pré-confirmado</span>';
-            return '<br><span class="badge bg-warning text-dark mt-1">Pendente confirmação</span>';
+            if (c.confirmado) return '<span class="badge bg-success mb-1">✓ Confirmado</span><br>';
+            if (c.pre_confirmado_em) return '<span class="badge bg-info text-dark mb-1">Pré-confirmado</span><br>';
+            return '<span class="badge bg-warning text-dark mb-1">Pendente confirmação</span><br>';
         }
 
         // Linha com os momentos de pré-confirmação (véspera) e confirmação oficial (2h)
@@ -814,8 +816,8 @@
             const ofi = fmtConfirma(c.confirmado_em);
             if (!pre && !ofi) return '';
             let h = '<div class="d-flex flex-wrap gap-1 mt-1" style="font-size:.72rem">';
-            if (pre) h += `<span class="badge bg-info text-dark" style="font-weight:500">Confirmou no dia: ${pre}</span>`;
-            if (ofi) h += `<span class="badge bg-success" style="font-weight:500">Confirmou na hora: ${ofi}</span>`;
+            if (pre) h += `<span class="badge bg-info text-dark" style="font-weight:500">Pré-confirmou em: ${pre}</span>`;
+            if (ofi) h += `<span class="badge bg-success" style="font-weight:500">Confirmou em: ${ofi}</span>`;
             h += '</div>';
             return h;
         }
@@ -1039,17 +1041,17 @@
             const termo = document.getElementById('search-consulta')?.value ?? '';
             axios.get('/agenda-search', { params: { q: termo } })
                 .then(res => {
-                    // preserva os acordeões (mês/dia) que estavam abertos
+                    // preserva exatamente o estado (aberto/fechado) dos acordeões (mês/dia)
                     const abertos = new Set();
                     document.querySelectorAll('#accordionMeses .collapse.show').forEach(el => abertos.add(el.id));
                     renderAccordionConsultas(res.data);
-                    abertos.forEach(id => {
-                        const el = document.getElementById(id);
-                        if (el) {
-                            el.classList.add('show');
-                            const btn = document.querySelector(`[data-bs-target="#${id}"]`);
-                            if (btn) btn.classList.remove('collapsed');
-                        }
+                    // reconcilia nos dois sentidos: reabre os que estavam abertos e fecha os demais
+                    // (evita que o dia de hoje, forçado a 'show' no render, reabra depois de fechado)
+                    document.querySelectorAll('#accordionMeses .collapse').forEach(el => {
+                        const deveAbrir = abertos.has(el.id);
+                        el.classList.toggle('show', deveAbrir);
+                        const btn = document.querySelector(`[data-bs-target="#${el.id}"]`);
+                        if (btn) btn.classList.toggle('collapsed', !deveAbrir);
                     });
                 })
                 .catch(() => {});
@@ -1440,6 +1442,11 @@
                         nomePaciente.textContent = c.user.name;
                         const nomeServico = document.createElement('span');
                         nomeServico.textContent = c.servico?.descricao ?? '';
+                        // Encaixe/horário especial que descontou de outro serviço: mostra "- nome descontado"
+                        const nomeCredito = document.createElement('span');
+                        nomeCredito.textContent = c.credito_servico?.descricao ?? '';
+                        const sufixoCredito = (c.credito_servico_id && c.credito_servico_id != c.servico_id && nomeCredito.textContent)
+                            ? ` - ${nomeCredito.textContent}` : '';
 
                         html += `
                             <div class="consulta-card ${c.confirmado ? '' : 'consulta-pendente'} ${(c.servico && !c.servico.visivel_cliente) ? 'consulta-especial' : ''} d-flex justify-content-between align-items-center" data-consulta-id="${c.id}">
@@ -1449,11 +1456,11 @@
                                         ${(c.servico && !c.servico.visivel_cliente) ? '<div class="mt-2"><span class="badge bg-danger">Horário especial</span></div>' : ''}
                                     </div>
                                     <div>
-                                        <strong>Paciente:</strong> ${nomePaciente.textContent}<br>
-                                        <strong>Serviço:</strong> ${nomeServico.textContent}
                                         ${statusConfirmacaoBadge(c)}
+                                        <strong>Paciente:</strong> ${nomePaciente.textContent}<br>
+                                        <strong>Serviço:</strong> ${nomeServico.textContent}${sufixoCredito}
                                         <div class="d-flex flex-wrap gap-1 mt-2" style="font-size:.72rem">
-                                            ${lembreteBadge(c.lembrete_24h, 'Véspera')}
+                                            ${lembreteBadge(c.lembrete_24h, 'Véspera', c.pre_confirmado_em ? 'bg-info text-dark' : 'bg-success')}
                                             ${lembreteBadge(c.lembrete_2h, '2h antes')}
                                         </div>
                                         ${confirmacaoTimestamps(c)}

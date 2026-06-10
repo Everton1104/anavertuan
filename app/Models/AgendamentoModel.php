@@ -56,6 +56,12 @@ class AgendamentoModel extends Model
         return $this->belongsTo(ServicosModel::class);
     }
 
+    // Serviço de onde o crédito foi descontado (ex.: Encaixe que abate de um pacote).
+    public function creditoServico()
+    {
+        return $this->belongsTo(ServicosModel::class, 'credito_servico_id');
+    }
+
     public function user()
     {
         return $this->belongsTo(User::class);

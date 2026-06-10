@@ -24,7 +24,7 @@ Route::get('/dashboard', function () {
     $servicos = ServicosModel::where('excluido', '0')->get();
     $mesAtual = now()->locale('pt_BR')->translatedFormat('F Y');
 
-    $consultasQuery = AgendamentoModel::with(['user', 'servico', 'lembretes'])->orderBy('data_inicio');
+    $consultasQuery = AgendamentoModel::with(['user', 'servico', 'creditoServico', 'lembretes'])->orderBy('data_inicio');
 
     if (!$user->adm && !$user->func) {
         $consultasQuery->where('user_id', $user->id);

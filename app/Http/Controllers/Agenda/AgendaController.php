@@ -634,7 +634,7 @@ class AgendaController extends Controller
             abort(403);
         }
 
-        $consultas = AgendamentoModel::with(['user', 'servico', 'lembretes'])
+        $consultas = AgendamentoModel::with(['user', 'servico', 'creditoServico', 'lembretes'])
             ->when($q !== '', fn($query) =>
                 $query->whereHas('user', fn($u) => $u->where('name', 'like', "%{$q}%"))
             )

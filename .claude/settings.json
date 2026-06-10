@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "input=$(cat); if printf '%s' \"$input\" | grep -qiE 'lembretes:enviar|graph\\.facebook\\.com|(enviarModelo|enviarMsg|enviarLembretes?|enviarCodigoVerificacao|reenviarLembrete)[[:space:]]*\\(' ; then printf '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"Guardrail de producao: este comando dispararia mensagem WhatsApp real a clientes (lembretes:enviar / enviar*( / graph.facebook.com). Execucao bloqueada. Se for realmente intencional, o usuario deve rodar manualmente ou ajustar .claude/settings.json.\"}}'; fi",
+            "statusMessage": "Checando envio de WhatsApp..."
+          }
+        ]
+      }
+    ]
+  }
+}

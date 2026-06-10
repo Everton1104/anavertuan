@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AgendamentoModel;
 use App\Models\CreditoServico;
 use App\Models\ServicosModel;
 use App\Models\User;
@@ -15,23 +16,26 @@ class CreditoServicoController extends Controller
         abort_unless($u && ($u->adm || $u->func), 403);
     }
 
-    // Lista os serviços contratados de um cliente, com usadas/restantes.
+    // Lista os pacotes contratados de um cliente, com usadas/restantes.
     public function index($userId)
     {
         $this->autorizar();
 
         $creditos = CreditoServico::with('servico')
+            ->withCount('agendamentos')
             ->where('user_id', $userId)
+            ->orderBy('id')
             ->get()
             ->map(function (CreditoServico $c) {
-                $usadas = $c->usadas();
                 return [
-                    'id'          => $c->id,
-                    'servico_id'  => $c->servico_id,
-                    'descricao'   => $c->servico->descricao ?? '—',
-                    'quantidade'  => $c->quantidade,
-                    'usadas'      => $usadas,
-                    'restantes'   => max(0, $c->quantidade - $usadas),
+                    'id'              => $c->id,
+                    'servico_id'      => $c->servico_id,
+                    'descricao'       => $c->servico->descricao ?? '—',
+                    'visivel_cliente' => (bool) ($c->servico->visivel_cliente ?? true),
+                    'quantidade'      => $c->quantidade,
+                    'usadas'          => $c->usadas(),
+                    'restantes'       => $c->restantes(),
+                    'criado_em'       => $c->created_at?->format('d/m/Y'),
                 ];
             })
             ->values();
@@ -39,7 +43,8 @@ class CreditoServicoController extends Controller
         return response()->json($creditos);
     }
 
-    // Adiciona (incrementa) unidades de um serviço ao cliente.
+    // Adiciona um novo pacote de unidades de um serviço ao cliente.
+    // Cada adição cria um pacote próprio (o cliente pode ter vários do mesmo serviço).
     public function store(Request $request, $userId)
     {
         $this->autorizar();
@@ -56,24 +61,28 @@ class CreditoServicoController extends Controller
         $user    = User::findOrFail($userId);
         $servico = ServicosModel::where('excluido', 0)->findOrFail($request->servico_id);
 
-        $credito = CreditoServico::firstOrNew([
+        CreditoServico::create([
             'user_id'    => $user->id,
             'servico_id' => $servico->id,
+            'quantidade' => (int) $request->quantidade,
         ]);
-        $credito->quantidade = ($credito->quantidade ?? 0) + (int) $request->quantidade;
-        $credito->save();
 
         return response()->json(['ok' => true]);
     }
 
-    // Remove o crédito de um serviço do cliente.
-    public function destroy($userId, $servicoId)
+    // Remove um pacote do cliente. Agendamentos que descontavam dele passam a livres.
+    public function destroy($userId, $creditoId)
     {
         $this->autorizar();
 
-        CreditoServico::where('user_id', $userId)
-            ->where('servico_id', $servicoId)
-            ->delete();
+        $credito = CreditoServico::where('user_id', $userId)->findOrFail($creditoId);
+
+        AgendamentoModel::where('credito_servico_id', $credito->id)->update([
+            'credito_servico_id' => null,
+            'consome_credito'    => false,
+        ]);
+
+        $credito->delete();
 
         return response()->json(['ok' => true]);
     }

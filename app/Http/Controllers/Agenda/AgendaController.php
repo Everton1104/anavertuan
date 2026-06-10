@@ -47,7 +47,7 @@ class AgendaController extends Controller
             ->map(fn($h) => substr($h, 0, 5))
             ->toArray();
 
-        $consultas = AgendamentoModel::with(['user', 'servico'])
+        $consultas = AgendamentoModel::with(['user', 'servico', 'creditoServico.servico'])
             ->whereDate('data_inicio', $data)
             ->orderBy('data_inicio')
             ->get();
@@ -69,7 +69,7 @@ class AgendaController extends Controller
                 if ($cursor >= $inicioC && $cursor < $fimC) {
                     $agendamentos[] = [
                         'paciente'  => $c->user->name,
-                        'servico'   => $c->servico->descricao ?? '',
+                        'servico'   => $c->servico_display,
                         'inicio'    => $inicioC->format('H:i'),
                         'fim'       => $fimC->format('H:i'),
                         // Serviços de staff são "transparentes": não bloqueiam o slot.
@@ -368,45 +368,44 @@ class AgendaController extends Controller
 
         $isEdicao = !empty($ignoreId);
 
-        // Créditos de serviço: ao criar (não na edição), consome 1 unidade do saldo.
-        // Reagendar (edição) não desconta de novo, e cancelar (destroy) devolve
-        // automaticamente (a linha some da contagem de usadas).
-        // - Serviços visíveis ao cliente EXIGEM saldo.
-        // - Serviços de staff são livres; mas se houver saldo contratado, também descontam.
-        if (!$isEdicao) {
-            if ($servico->visivel_cliente) {
-                // Serviço visível: desconta do próprio serviço (exige saldo).
-                $credito = CreditoServico::where('user_id', $request->user_id)
-                    ->where('servico_id', $servico->id)
-                    ->first();
+        // Créditos de serviço: consome 1 unidade do pacote (credito_id = linha de
+        // creditos_servico; o cliente pode ter vários pacotes do mesmo serviço).
+        // Cancelar (destroy) devolve automaticamente (a linha some da contagem).
+        // - Serviços visíveis ao cliente EXIGEM um pacote com saldo (do próprio serviço).
+        // - Serviços de staff (ex.: especial) podem descontar de qualquer pacote do
+        //   cliente ou ser livres (sem desconto).
+        // Na edição, só o staff pode trocar o pacote; mantido o mesmo, não revalida
+        // (o pacote pode estar zerado justamente por este agendamento). Cliente
+        // reagendando não envia credito_id e não altera o desconto.
+        $creditoAtualId = $isEdicao ? $agendamento->credito_servico_id : null;
+        $creditoNovoId  = $request->credito_id ?: null;
+        $alterarCredito = !$isEdicao
+            || ($isStaff && (string) ($creditoNovoId ?? '') !== (string) ($creditoAtualId ?? ''));
+
+        if ($alterarCredito) {
+            $credito = null;
+
+            if ($creditoNovoId) {
+                $credito = CreditoServico::where('user_id', $request->user_id)->find($creditoNovoId);
 
                 if (!$credito || $credito->restantes() <= 0) {
+                    return back()
+                        ->withErrors(['servico_id' => 'O pacote escolhido para desconto não possui saldo.'])
+                        ->withInput();
+                }
+            }
+
+            if ($servico->visivel_cliente) {
+                // Serviço visível: o pacote deve ser do próprio serviço.
+                if (!$credito || (int) $credito->servico_id !== (int) $servico->id) {
                     return back()
                         ->withErrors(['servico_id' => 'O cliente não possui saldo disponível para este serviço.'])
                         ->withInput();
                 }
-
-                $agendamento->credito_servico_id = $servico->id;
-                $agendamento->consome_credito    = true;
-            } else {
-                // Serviço de staff (ex.: Encaixe): pode descontar de outro serviço
-                // contratado pelo cliente, ou ser livre (sem desconto).
-                $alvoId = $request->credito_servico_id;
-                if ($alvoId) {
-                    $credito = CreditoServico::where('user_id', $request->user_id)
-                        ->where('servico_id', $alvoId)
-                        ->first();
-
-                    if (!$credito || $credito->restantes() <= 0) {
-                        return back()
-                            ->withErrors(['servico_id' => 'O serviço escolhido para desconto não possui saldo.'])
-                            ->withInput();
-                    }
-
-                    $agendamento->credito_servico_id = $alvoId;
-                    $agendamento->consome_credito    = true;
-                }
             }
+
+            $agendamento->credito_servico_id = $credito?->id;
+            $agendamento->consome_credito    = (bool) $credito;
         }
 
         $agendamento->user_id     = $request->user_id;
@@ -446,11 +445,15 @@ class AgendaController extends Controller
         $hora    = Carbon::parse($agendamento->data_inicio)->format('H:i');
         $servico = $agendamento->servico->descricao ?? '';
 
-        // Encaixe (serviço de staff) que descontou de outro serviço do cliente:
-        // mostra ao cliente o nome do serviço descontado. Se for cortesia (sem
-        // desconto), mantém o nome original.
-        if ($agendamento->credito_servico_id && $agendamento->credito_servico_id != $agendamento->servico_id) {
-            $servico = optional(ServicosModel::find($agendamento->credito_servico_id))->descricao ?? $servico;
+        // Pacote descontado: mostra o saldo restante "Serviço X (2/5)". Especial que
+        // descontou de outro serviço mostra o nome do serviço descontado. Cortesia
+        // (sem desconto) mantém o nome original sem contador.
+        $credito = $agendamento->creditoServico;
+        if ($credito) {
+            if ($credito->servico_id != $agendamento->servico_id) {
+                $servico = $credito->servico->descricao ?? $servico;
+            }
+            $servico .= ' (' . $credito->restantes() . '/' . $credito->quantidade . ')';
         }
 
         if ($isEdicao) {
@@ -634,7 +637,12 @@ class AgendaController extends Controller
             abort(403);
         }
 
-        $consultas = AgendamentoModel::with(['user', 'servico', 'creditoServico', 'lembretes'])
+        $consultas = AgendamentoModel::with([
+                'user',
+                'servico',
+                'lembretes',
+                'creditoServico' => fn($q) => $q->with('servico')->withCount('agendamentos'),
+            ])
             ->when($q !== '', fn($query) =>
                 $query->whereHas('user', fn($u) => $u->where('name', 'like', "%{$q}%"))
             )

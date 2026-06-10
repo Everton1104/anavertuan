@@ -382,11 +382,31 @@
                     @csrf
                     @method('post')
                     <x-app.select label="Cliente" name="user_id" required="true" :options="$clientes->pluck('name', 'id')" />
-                    <x-app.select label="Selecione o serviço" name="servico_id" required="true" :options="$servicos->where('status', 1)->mapWithKeys(fn($s) => [$s->id => $s->descricao . ' — ' . substr($s->duracao, 0, 5) . ($s->visivel_cliente ? '' : ' [Staff]')])" />
-                    {{-- Para serviços de staff (ex.: Encaixe): de qual serviço contratado descontar --}}
+                    @php $temEspecial = $servicos->where('status', 1)->where('visivel_cliente', 0)->isNotEmpty(); @endphp
+                    {{-- Serviço comum: um item por PACOTE contratado (com saldo restante/total).
+                         O select não é enviado; ele alimenta os campos ocultos servico_id e credito_id. --}}
+                    <div id="servico-normal-wrap" class="mb-3">
+                        <label for="servico_sel" class="form-label">Selecione o serviço</label>
+                        <select id="servico_sel" class="form-select {{ $errors->has('servico_id') ? 'is-invalid' : '' }}" required>
+                            <option value="">Selecione o cliente primeiro</option>
+                        </select>
+                        @error('servico_id')
+                            <div class="invalid-feedback d-block">{{ $message }}</div>
+                        @enderror
+                    </div>
+                    @if($temEspecial)
+                        {{-- Serviço especial (encaixe): não é um serviço comum; desconta de um pacote já existente do cliente. --}}
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="chk_especial">
+                            <label class="form-check-label" for="chk_especial">Serviço especial (encaixe)</label>
+                        </div>
+                    @endif
+                    <input type="hidden" name="servico_id" id="servico_id" value="{{ old('servico_id') }}">
+                    <input type="hidden" name="credito_id" id="credito_id" value="{{ old('credito_id') }}">
+                    {{-- Serviço especial: de qual pacote contratado descontar (ou encaixe livre) --}}
                     <div id="credito-alvo-wrap" class="mb-3 d-none">
-                        <label for="credito_servico_id" class="form-label">Descontar de</label>
-                        <select name="credito_servico_id" id="credito_servico_id" class="form-select">
+                        <label for="credito_alvo" class="form-label">Descontar de</label>
+                        <select id="credito_alvo" class="form-select">
                             <option value="">Não descontar (encaixe livre)</option>
                         </select>
                     </div>
@@ -561,7 +581,7 @@
                                                         @endif
                                                         <br>
                                                         <strong>Paciente:</strong> {{ $consulta->user->name }}<br>
-                                                        <strong>Serviço:</strong> {{ $consulta->servico->descricao ?? '' }}@if($consulta->credito_servico_id && $consulta->credito_servico_id != $consulta->servico_id && $consulta->creditoServico) - {{ $consulta->creditoServico->descricao }}@endif
+                                                        <strong>Serviço:</strong> {{ $consulta->servico_display }}
                                                         @if($isStaff)
                                                             <div class="d-flex flex-wrap gap-1 mt-2" style="font-size:.72rem">
                                                                 {!! $lembreteBadge($consulta->lembrete_24h, 'Véspera', $consulta->pre_confirmado_em ? 'bg-info text-dark' : 'bg-success') !!}
@@ -691,8 +711,8 @@
                     // Navegar o calendário para o mês da consulta
                     dataAtual = new Date(c.data_inicio.replace(' ', 'T'));
 
-                    // Carrega os serviços do cliente (forçando o serviço atual) antes de abrir
-                    popularSelectServicos(c.user_id, c.servico_id, () => {
+                    // Carrega os serviços do cliente (forçando o serviço/pacote atual) antes de abrir
+                    popularSelectServicos(c.user_id, { servicoId: c.servico_id, creditoId: c.credito_servico_id }, () => {
                         new bootstrap.Modal(document.getElementById('modal-add-agenda')).show();
 
                         carregarMes().then(() => {
@@ -898,8 +918,9 @@
                         ${c.descricao}
                         <span class="badge bg-secondary">${c.usadas}/${c.quantidade} usadas</span>
                         <span class="badge ${c.restantes > 0 ? 'bg-success' : 'bg-danger'}">resta ${c.restantes}</span>
+                        ${c.criado_em ? `<span class="text-muted">desde ${c.criado_em}</span>` : ''}
                     </span>
-                    <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2" onclick="removerCredito(${c.servico_id})" title="Remover">&times;</button>
+                    <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2" onclick="removerCredito(${c.id})" title="Remover">&times;</button>
                 </div>`).join('');
         }
 
@@ -916,95 +937,170 @@
                 .catch(err => alert(err.response?.data?.message ?? 'Erro ao adicionar serviço.'));
         }
 
-        function removerCredito(servicoId) {
+        function removerCredito(creditoId) {
             const userId = document.getElementById('edt-id').value;
             if (!userId) return;
-            if (!confirm('Remover este serviço contratado do cliente?')) return;
-            axios.delete(`/clientes/${userId}/creditos/${servicoId}`)
+            if (!confirm('Remover este pacote contratado do cliente?')) return;
+            axios.delete(`/clientes/${userId}/creditos/${creditoId}`)
                 .then(() => carregarCreditos(userId))
-                .catch(() => alert('Erro ao remover serviço.'));
+                .catch(() => alert('Erro ao remover pacote.'));
         }
 
-        // Créditos do cliente atualmente carregados (para o campo "Descontar de").
+        // Pacotes do cliente atualmente carregados (alimentam o select de serviço e o "Descontar de").
         let creditosClienteAtual = [];
 
-        // Popula o select de serviço do Novo Agendamento conforme o saldo do cliente.
-        // forcarServicoId garante que um serviço já agendado (edição) apareça mesmo sem saldo.
-        function popularSelectServicos(userId, forcarServicoId, cb) {
-            const sel = document.getElementById('servico_id');
-            if (!sel) { if (cb) cb(); return; }
-            if (!userId) {
-                sel.innerHTML = '<option value="">Selecione o cliente primeiro</option>';
-                if (cb) cb();
-                return;
-            }
-            axios.get(`/api/clientes/${userId}/creditos`).then(res => {
-                creditosClienteAtual = res.data;
-
-                let opts = '<option value="">Selecione o serviço</option>';
-
-                // Serviços visíveis: só aparecem se tiverem saldo (com contador)
-                res.data.filter(c => c.restantes > 0).forEach(c => {
-                    const s = SERVICOS.find(x => x.id == c.servico_id);
-                    if (s && !s.visivel_cliente) return; // staff é tratado abaixo (evita duplicar)
-                    opts += `<option value="${c.servico_id}">${c.descricao} (${c.usadas + 1}/${c.quantidade})</option>`;
-                });
-
-                // Serviços de staff (internos): sempre disponíveis (livres ou descontando de outro)
-                SERVICOS.filter(s => !s.visivel_cliente && s.status == 1).forEach(s => {
-                    opts += `<option value="${s.id}">${s.descricao} [Staff]</option>`;
-                });
-                if (forcarServicoId && !opts.includes(`value="${forcarServicoId}"`)) {
-                    const s = SERVICOS.find(x => x.id == forcarServicoId);
-                    if (s) opts += `<option value="${forcarServicoId}">${s.descricao}</option>`;
-                }
-                sel.innerHTML = opts;
-                if (forcarServicoId) sel.value = forcarServicoId;
-                atualizarCreditoAlvo();
-                if (cb) cb();
-            }).catch(() => { creditosClienteAtual = []; atualizarCreditoAlvo(); if (cb) cb(); });
+        // Serviço especial (staff): usado quando o checkbox "Serviço especial" está marcado.
+        function servicoEspecial() {
+            return (typeof SERVICOS !== 'undefined')
+                ? (SERVICOS.find(s => !s.visivel_cliente && s.status == 1) || null)
+                : null;
         }
 
-        // Para serviços de staff (ex.: Encaixe), mostra "Descontar de" com os serviços
-        // contratados do cliente que ainda têm saldo.
-        function atualizarCreditoAlvo() {
-            const wrap = document.getElementById('credito-alvo-wrap');
-            const alvo = document.getElementById('credito_servico_id');
-            if (!wrap || !alvo) return;
-            const servId = document.getElementById('servico_id').value;
-            const s = SERVICOS.find(x => x.id == servId);
-            const ehStaff = s && !s.visivel_cliente;
-            if (!ehStaff) {
-                wrap.classList.add('d-none');
-                alvo.value = '';
-                return;
-            }
-            const disponiveis = creditosClienteAtual.filter(c => c.restantes > 0);
-            let opts = '<option value="">Não descontar (encaixe livre)</option>';
-            disponiveis.forEach(c => {
-                opts += `<option value="${c.servico_id}">${c.descricao} (${c.usadas + 1}/${c.quantidade})</option>`;
-            });
-            alvo.innerHTML = opts;
-            // Pré-seleciona o 1º serviço com saldo (caso mais comum); o funcionário
-            // pode trocar para "Não descontar" quando for cortesia.
-            alvo.value = disponiveis.length ? String(disponiveis[0].servico_id) : '';
-            wrap.classList.remove('d-none');
-        }
-
-        // Ao trocar o cliente no Novo Agendamento, recarrega os serviços disponíveis (com saldo).
-        document.getElementById('user_id')?.addEventListener('change', function () {
-            popularSelectServicos(this.value);
-            document.getElementById('horarios').innerHTML = '';
+        // Limpa a seleção de dia/horário (a duração depende do serviço escolhido).
+        function resetSelecaoHorario() {
             document.getElementById('horarios-erro').textContent = '';
+            document.getElementById('horarios').innerHTML = '';
             document.querySelectorAll('.cal-dia').forEach(d => d.classList.remove('cal-selecionado'));
             document.getElementById('dia_selecionado').value  = '';
             document.getElementById('hora_selecionada').value = '';
             document.getElementById('data_inicio').value      = '';
             document.getElementById('data_fim').value         = '';
+        }
+
+        // Sincroniza os campos ocultos servico_id / credito_id conforme o modo:
+        // - especial marcado   → servico_id = serviço especial; credito_id = pacote do "Descontar de" (vazio = livre)
+        // - especial desmarcado → vêm do pacote escolhido no select (valor "c-{pacoteId}")
+        function sincronizarAgendamento() {
+            const chk = document.getElementById('chk_especial');
+            if (chk && chk.checked) {
+                const esp = servicoEspecial();
+                document.getElementById('servico_id').value = esp ? esp.id : '';
+                document.getElementById('credito_id').value = document.getElementById('credito_alvo').value;
+                return;
+            }
+            const sel = document.getElementById('servico_sel');
+            let servicoId = '', creditoId = '';
+            if (sel && sel.value.startsWith('c-')) {
+                creditoId = sel.value.slice(2);
+                const c = creditosClienteAtual.find(x => x.id == creditoId);
+                servicoId = c ? String(c.servico_id) : '';
+            }
+            document.getElementById('servico_id').value = servicoId;
+            document.getElementById('credito_id').value = creditoId;
+        }
+
+        // Mostra/esconde os campos conforme o checkbox "Serviço especial".
+        function aplicarModoEspecial() {
+            const chk = document.getElementById('chk_especial');
+            const sel = document.getElementById('servico_sel');
+            const wrapNormal = document.getElementById('servico-normal-wrap');
+            const wrapAlvo   = document.getElementById('credito-alvo-wrap');
+            const especial = !!(chk && chk.checked);
+            if (wrapNormal) wrapNormal.classList.toggle('d-none', especial);
+            if (sel) sel.required = !especial;
+            if (wrapAlvo) wrapAlvo.classList.toggle('d-none', !especial);
+            sincronizarAgendamento();
+        }
+
+        // Popula o select de serviço comum (um item por PACOTE de serviço visível com
+        // saldo) e o "Descontar de" (qualquer pacote com saldo + encaixe livre).
+        // forcar = {servicoId, creditoId} reabre um agendamento existente no modo
+        // certo: comum (pacote no select) ou especial (checkbox + "Descontar de").
+        function popularSelectServicos(userId, forcar, cb) {
+            const sel  = document.getElementById('servico_sel');
+            const alvo = document.getElementById('credito_alvo');
+            const chk  = document.getElementById('chk_especial');
+            if (!sel) { if (cb) cb(); return; }
+            if (!userId) {
+                creditosClienteAtual = [];
+                sel.innerHTML = '<option value="">Selecione o cliente primeiro</option>';
+                if (alvo) alvo.innerHTML = '<option value="">Não descontar (encaixe livre)</option>';
+                if (chk) chk.checked = false;
+                aplicarModoEspecial();
+                if (cb) cb();
+                return;
+            }
+            axios.get(`/api/clientes/${userId}/creditos`).then(res => {
+                creditosClienteAtual = res.data;
+                const comSaldo = res.data.filter(c => c.restantes > 0);
+
+                // Select de serviço comum: pacotes de serviços visíveis com saldo
+                let opts = '<option value="">Selecione o serviço</option>';
+                comSaldo.filter(c => c.visivel_cliente).forEach(c => {
+                    opts += `<option value="c-${c.id}">${c.descricao} (${c.restantes}/${c.quantidade})</option>`;
+                });
+
+                // "Descontar de": qualquer pacote com saldo (de qualquer serviço) + encaixe livre
+                let optsAlvo = '<option value="">Não descontar (encaixe livre)</option>';
+                comSaldo.forEach(c => {
+                    optsAlvo += `<option value="${c.id}">${c.descricao} (${c.restantes}/${c.quantidade})</option>`;
+                });
+
+                // Edição: o agendamento é especial se o serviço for o serviço staff
+                const esp = servicoEspecial();
+                const ehEspecial = forcar && forcar.servicoId && esp
+                    && String(forcar.servicoId) === String(esp.id);
+
+                // Comum em edição: garante a opção do pacote atual mesmo sem saldo
+                if (forcar && forcar.servicoId && !ehEspecial && forcar.creditoId
+                    && !opts.includes(`value="c-${forcar.creditoId}"`)) {
+                    const c = creditosClienteAtual.find(x => x.id == forcar.creditoId);
+                    const s = SERVICOS.find(x => x.id == forcar.servicoId);
+                    const label = c ? `${c.descricao} (${c.restantes}/${c.quantidade})` : (s ? s.descricao : 'Serviço atual');
+                    opts += `<option value="c-${forcar.creditoId}">${label}</option>`;
+                }
+                // Especial em edição que descontava de um pacote: garante a opção no "Descontar de"
+                if (ehEspecial && forcar.creditoId && !optsAlvo.includes(`value="${forcar.creditoId}"`)) {
+                    const c = creditosClienteAtual.find(x => x.id == forcar.creditoId);
+                    const label = c ? `${c.descricao} (${c.restantes}/${c.quantidade})` : 'Pacote atual';
+                    optsAlvo += `<option value="${forcar.creditoId}">${label}</option>`;
+                }
+
+                sel.innerHTML = opts;
+                if (alvo) alvo.innerHTML = optsAlvo;
+                if (chk) chk.checked = !!ehEspecial;
+
+                if (ehEspecial) {
+                    if (alvo) alvo.value = forcar.creditoId ? String(forcar.creditoId) : '';
+                } else if (forcar && forcar.creditoId) {
+                    sel.value = `c-${forcar.creditoId}`;
+                }
+
+                aplicarModoEspecial();
+                if (cb) cb();
+            }).catch(() => { creditosClienteAtual = []; aplicarModoEspecial(); if (cb) cb(); });
+        }
+
+        // Ao trocar o cliente no Novo Agendamento, recarrega os pacotes disponíveis e reinicia a seleção.
+        document.getElementById('user_id')?.addEventListener('change', function () {
+            popularSelectServicos(this.value);
+            resetSelecaoHorario();
         });
 
-        // Ao trocar o serviço, atualiza o campo "Descontar de"
-        document.getElementById('servico_id')?.addEventListener('change', atualizarCreditoAlvo);
+        // Ao trocar o pacote no select de serviço comum, sincroniza os campos ocultos
+        // e reinicia a seleção de dia/horário (o serviço define a duração dos slots).
+        document.getElementById('servico_sel')?.addEventListener('change', function () {
+            sincronizarAgendamento();
+            resetSelecaoHorario();
+        });
+
+        // Ao marcar/desmarcar "Serviço especial": alterna os campos e reinicia o horário.
+        // Ao marcar, pré-seleciona o 1º pacote com saldo no "Descontar de" (caso mais
+        // comum); o funcionário pode trocar para "Não descontar" quando for cortesia.
+        document.getElementById('chk_especial')?.addEventListener('change', function () {
+            if (this.checked) {
+                const alvo = document.getElementById('credito_alvo');
+                const primeiro = creditosClienteAtual.find(c => c.restantes > 0);
+                if (alvo && primeiro && !alvo.value) alvo.value = String(primeiro.id);
+            }
+            aplicarModoEspecial();
+            resetSelecaoHorario();
+        });
+
+        // Ao trocar o pacote no "Descontar de" (especial), grava no campo enviado.
+        document.getElementById('credito_alvo')?.addEventListener('change', function () {
+            document.getElementById('credito_id').value = this.value;
+        });
 
         // ── Auto-atualização parcial (só funcionário/adm) ────────────────────
         // Atualiza avisos e consultas via axios (sem recarregar a página), para
@@ -1370,6 +1466,11 @@
             mgmCarregarMes();
 
             @if($errors->any() && old('data_inicio'))
+                // Repopula o select de serviços com os pacotes do cliente antes de reabrir
+                popularSelectServicos(@json(old('user_id')), {
+                    servicoId: @json(old('servico_id')),
+                    creditoId: @json(old('credito_id')),
+                });
                 new bootstrap.Modal(document.getElementById('modal-add-agenda')).show();
             @endif
         });
@@ -1440,13 +1541,9 @@
 
                         const nomePaciente = document.createElement('span');
                         nomePaciente.textContent = c.user.name;
+                        // servico_display já inclui o pacote descontado e o saldo: "Serviço X (2/5)"
                         const nomeServico = document.createElement('span');
-                        nomeServico.textContent = c.servico?.descricao ?? '';
-                        // Encaixe/horário especial que descontou de outro serviço: mostra "- nome descontado"
-                        const nomeCredito = document.createElement('span');
-                        nomeCredito.textContent = c.credito_servico?.descricao ?? '';
-                        const sufixoCredito = (c.credito_servico_id && c.credito_servico_id != c.servico_id && nomeCredito.textContent)
-                            ? ` - ${nomeCredito.textContent}` : '';
+                        nomeServico.textContent = c.servico_display ?? (c.servico?.descricao ?? '');
 
                         html += `
                             <div class="consulta-card ${c.confirmado ? '' : 'consulta-pendente'} ${(c.servico && !c.servico.visivel_cliente) ? 'consulta-especial' : ''} d-flex justify-content-between align-items-center" data-consulta-id="${c.id}">
@@ -1458,7 +1555,7 @@
                                     <div>
                                         ${statusConfirmacaoBadge(c)}
                                         <strong>Paciente:</strong> ${nomePaciente.textContent}<br>
-                                        <strong>Serviço:</strong> ${nomeServico.textContent}${sufixoCredito}
+                                        <strong>Serviço:</strong> ${nomeServico.textContent}
                                         <div class="d-flex flex-wrap gap-1 mt-2" style="font-size:.72rem">
                                             ${lembreteBadge(c.lembrete_24h, 'Véspera', c.pre_confirmado_em ? 'bg-info text-dark' : 'bg-success')}
                                             ${lembreteBadge(c.lembrete_2h, '2h antes')}

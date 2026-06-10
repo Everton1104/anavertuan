@@ -37,8 +37,9 @@ class AgendamentoModel extends Model
         return $date->format('Y-m-d H:i:s');
     }
 
-    // Expõe o status de cada lembrete no JSON (consumido pelos cards do dashboard).
-    protected $appends = ['lembrete_24h', 'lembrete_2h'];
+    // Expõe o status de cada lembrete e o nome de exibição do serviço no JSON
+    // (consumidos pelos cards do dashboard).
+    protected $appends = ['lembrete_24h', 'lembrete_2h', 'servico_display'];
 
     // 'enviado' | 'erro' | null (ainda não disparado)
     public function getLembrete24hAttribute(): ?string
@@ -56,10 +57,28 @@ class AgendamentoModel extends Model
         return $this->belongsTo(ServicosModel::class);
     }
 
-    // Serviço de onde o crédito foi descontado (ex.: Encaixe que abate de um pacote).
+    // Pacote (creditos_servico) de onde este agendamento desconta 1 unidade.
+    // Pode ser de outro serviço (ex.: especial que abate de um pacote). NULL = livre.
     public function creditoServico()
     {
-        return $this->belongsTo(ServicosModel::class, 'credito_servico_id');
+        return $this->belongsTo(CreditoServico::class, 'credito_servico_id');
+    }
+
+    // Nome de exibição do serviço com o saldo do pacote: "Serviço X (2/5)".
+    // Especial que desconta de outro serviço: "especial - Serviço X (2/5)".
+    public function getServicoDisplayAttribute(): string
+    {
+        $nome    = $this->servico->descricao ?? '';
+        $credito = $this->creditoServico;
+
+        if ($credito) {
+            if ($credito->servico_id != $this->servico_id) {
+                $nome .= ' - ' . ($credito->servico->descricao ?? '');
+            }
+            $nome .= ' (' . $credito->restantes() . '/' . $credito->quantidade . ')';
+        }
+
+        return $nome;
     }
 
     public function user()

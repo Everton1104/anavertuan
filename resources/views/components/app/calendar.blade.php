@@ -272,14 +272,17 @@
 
     function getHoras(data) {
         const servico_id = document.getElementById('servico_id').value;
+        // No form do staff o servico_id é um campo oculto alimentado pelo select
+        // visível #servico_sel; o feedback de inválido vai no elemento visível.
+        const campoServico = document.getElementById('servico_sel') ?? document.getElementById('servico_id');
 
         if (!servico_id) {
-            document.getElementById('servico_id').classList.add('is-invalid');
+            campoServico.classList.add('is-invalid');
             document.querySelectorAll(".cal-dia").forEach(d => d.classList.remove("cal-selecionado"));
             return;
         }
 
-        document.getElementById('servico_id').classList.remove('is-invalid');
+        campoServico.classList.remove('is-invalid');
         document.getElementById('horarios').innerHTML = "<p>Carregando...</p>";
 
         axios.get('/api/horarios/' + data, {

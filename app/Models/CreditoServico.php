@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
+// Um pacote de unidades de um serviço contratado pelo cliente. O mesmo cliente
+// pode ter mais de um pacote do mesmo serviço (cada linha é um pacote).
 class CreditoServico extends Model
 {
     protected $table = 'creditos_servico';
@@ -22,14 +24,16 @@ class CreditoServico extends Model
         return $this->belongsTo(ServicosModel::class, 'servico_id');
     }
 
-    // Quantas unidades deste serviço o cliente já consumiu (agendamentos vivos).
-    // Conta pelo serviço de desconto (credito_servico_id), que pode vir de um
-    // agendamento de outro serviço (ex.: um "Encaixe" descontando deste pacote).
+    // Agendamentos vivos que consomem deste pacote (inclui encaixes de outros serviços).
+    public function agendamentos()
+    {
+        return $this->hasMany(AgendamentoModel::class, 'credito_servico_id');
+    }
+
     public function usadas(): int
     {
-        return AgendamentoModel::where('user_id', $this->user_id)
-            ->where('credito_servico_id', $this->servico_id)
-            ->count();
+        // Usa o withCount quando carregado em lote, para evitar 1 consulta por pacote.
+        return $this->agendamentos_count ?? $this->agendamentos()->count();
     }
 
     public function restantes(): int

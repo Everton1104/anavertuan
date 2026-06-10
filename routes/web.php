@@ -24,7 +24,12 @@ Route::get('/dashboard', function () {
     $servicos = ServicosModel::where('excluido', '0')->get();
     $mesAtual = now()->locale('pt_BR')->translatedFormat('F Y');
 
-    $consultasQuery = AgendamentoModel::with(['user', 'servico', 'creditoServico', 'lembretes'])->orderBy('data_inicio');
+    $consultasQuery = AgendamentoModel::with([
+        'user',
+        'servico',
+        'lembretes',
+        'creditoServico' => fn($q) => $q->with('servico')->withCount('agendamentos'),
+    ])->orderBy('data_inicio');
 
     if (!$user->adm && !$user->func) {
         $consultasQuery->where('user_id', $user->id);
@@ -57,7 +62,7 @@ Route::get('usuarios-search', [RegisteredUserController::class, 'search'])->midd
 Route::middleware('auth')->group(function () {
     Route::get('/api/clientes/{userId}/creditos',              [CreditoServicoController::class, 'index'])->name('creditos.index');
     Route::post('/clientes/{userId}/creditos',                 [CreditoServicoController::class, 'store'])->name('creditos.store');
-    Route::delete('/clientes/{userId}/creditos/{servicoId}',   [CreditoServicoController::class, 'destroy'])->name('creditos.destroy');
+    Route::delete('/clientes/{userId}/creditos/{creditoId}',   [CreditoServicoController::class, 'destroy'])->name('creditos.destroy');
 });
 Route::resource('agenda', AgendaController::class)->middleware('auth');
 Route::post('agenda/{id}/confirmar', [AgendaController::class, 'confirmar'])->middleware('auth')->name('agenda.confirmar');

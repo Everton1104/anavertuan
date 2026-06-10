@@ -128,6 +128,7 @@ class WhatsappController extends Controller
             'tipo'        => 'reagendamento_solicitado',
             'user_id'     => $agendamento->user_id,
             'servico_id'  => $agendamento->servico_id,
+            'especial'    => $agendamento->especial,
             'data_antiga' => $agendamento->data_inicio,
         ]);
 

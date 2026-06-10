@@ -16,6 +16,7 @@ class AgendamentoModel extends Model
         'data_fim',
         'confirmado',
         'consome_credito',
+        'especial',
         'credito_servico_id',
         'pre_confirmado_em',
         'confirmado_em',
@@ -26,6 +27,7 @@ class AgendamentoModel extends Model
         'data_fim'           => 'datetime',
         'confirmado'         => 'boolean',
         'consome_credito'    => 'boolean',
+        'especial'           => 'boolean',
         'pre_confirmado_em'  => 'datetime',
         'confirmado_em'      => 'datetime',
     ];

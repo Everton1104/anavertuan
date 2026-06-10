@@ -18,7 +18,9 @@ class ServicoController extends Controller
             'visivel_cliente' => ['nullable', 'boolean'],
         ]);
 
-        $visivelCliente = (bool) $request->visivel_cliente;
+        // "Serviço staff" foi descontinuado: o encaixe agora é a flag `especial` do
+        // agendamento. Todo serviço é normal/visível. A coluna é mantida por histórico.
+        $visivelCliente = true;
         $totalMinutos   = ($request->duracao_h * 60) + $request->duracao_m;
 
         if ($totalMinutos <= 0) {
@@ -75,7 +77,8 @@ class ServicoController extends Controller
             'visivel_cliente_servico' => ['nullable', 'boolean'],
         ]);
 
-        $visivelCliente = (bool) $request->visivel_cliente_servico;
+        // Serviço staff descontinuado (ver store): todo serviço é normal/visível.
+        $visivelCliente = true;
         $totalMinutos   = ($request->duracao_h_edt_servico * 60) + $request->duracao_m_edt_servico;
 
         if ($totalMinutos <= 0) {

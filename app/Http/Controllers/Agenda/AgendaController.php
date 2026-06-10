@@ -77,8 +77,8 @@ class AgendaController extends Controller
                         'servico'   => $c->servico_display,
                         'inicio'    => $inicioC->format('H:i'),
                         'fim'       => $fimC->format('H:i'),
-                        // Serviços de staff são "transparentes": não bloqueiam o slot.
-                        'is_staff'  => !(optional($c->servico)->visivel_cliente),
+                        // Agendamentos especiais são "transparentes": não bloqueiam o slot.
+                        'is_staff'  => (bool) $c->especial,
                     ];
                 }
             }
@@ -148,8 +148,10 @@ class AgendaController extends Controller
             return response()->json(['error' => 'Serviço não disponível'], 403);
         }
 
-        // Serviços de staff podem ser colocados sobre outros horários sem conflitar com eles
-        $servicoEhStaff = !$servico->visivel_cliente;
+        // Agendamento especial (encaixe) pode ser colocado sobre outros horários sem
+        // conflitar com eles. É uma propriedade do agendamento (não do serviço) e só o
+        // staff pode marcá-lo, vindo do checkbox no formulário.
+        $especialAgendamento = $isStaff && request()->boolean('especial');
 
         // Clientes só enxergam slots em :00 e :30
         if (!$isStaff) {
@@ -166,7 +168,11 @@ class AgendaController extends Controller
             ->orderBy('data_inicio')
             ->get();
 
-        $duracaoMin      = $this->timeToMinutes($servico->duracao);
+        // Especial pode ter duração personalizada; vazio = duração do serviço.
+        $duracaoMin = $this->timeToMinutes($servico->duracao);
+        if ($especialAgendamento && request()->filled('duracao_min')) {
+            $duracaoMin = max(1, (int) request('duracao_min'));
+        }
         $intervalo       = $isStaff ? 15 : 30;
         $slotsNecessarios = (int) ceil($duracaoMin / $intervalo);
 
@@ -201,10 +207,10 @@ class AgendaController extends Controller
             $motivo     = null;
 
             // 1. Slot diretamente ocupado por um agendamento
-            // Serviços de staff não conflitam: nem bloqueiam nem são bloqueados por outros agendamentos.
-            if (!$servicoEhStaff) {
+            // Especiais não conflitam: nem bloqueiam nem são bloqueados por outros agendamentos.
+            if (!$especialAgendamento) {
                 foreach ($consultas as $c) {
-                    if (!optional($c->servico)->visivel_cliente) continue; // agendamento de staff não bloqueia
+                    if ($c->especial) continue; // agendamento especial não bloqueia
                     $inicioC = Carbon::parse($c->data_inicio);
                     $fimC    = Carbon::parse($c->data_fim);
                     if ($inicio >= $inicioC && $inicio < $fimC) {
@@ -228,9 +234,9 @@ class AgendaController extends Controller
             }
 
             // 3. Duração conflita com outro agendamento?
-            if (!$ocupado && !$servicoEhStaff) {
+            if (!$ocupado && !$especialAgendamento) {
                 foreach ($consultas as $c) {
-                    if (!optional($c->servico)->visivel_cliente) continue; // agendamento de staff não bloqueia
+                    if ($c->especial) continue; // agendamento especial não bloqueia
                     $inicioC = Carbon::parse($c->data_inicio);
                     $fimC    = Carbon::parse($c->data_fim);
                     if ($inicio < $fimC && $fimTeorico > $inicioC) {
@@ -307,7 +313,14 @@ class AgendaController extends Controller
             }
         }
 
-        $duracao   = $this->timeToMinutes($servico->duracao);
+        // Agendamento especial (encaixe): só o staff pode marcar. Pode sobrepor outros
+        // agendamentos e ter duração personalizada (vazio = duração do serviço).
+        $especial = $isStaff && $request->boolean('especial');
+
+        $duracao = $this->timeToMinutes($servico->duracao);
+        if ($especial && $request->filled('duracao_min')) {
+            $duracao = max(1, (int) $request->duracao_min);
+        }
         $intervalo = $isStaff ? 15 : 30;
         $inicio    = Carbon::parse($request->data_inicio);
         $fim       = $inicio->copy()->addMinutes($duracao);
@@ -347,13 +360,14 @@ class AgendaController extends Controller
             }
         }
 
-        // Serviços de staff podem ser colocados sobre outros horários sem conflitar.
-        // Demais serviços só conflitam com agendamentos de clientes (os de staff são "transparentes").
-        $existeConflito = $servico->visivel_cliente && AgendamentoModel::where(function ($q) use ($inicio, $fim) {
+        // Agendamentos especiais (encaixe) podem ser colocados sobre outros horários sem
+        // conflitar. Os demais só conflitam com agendamentos não-especiais (os especiais
+        // são "transparentes").
+        $existeConflito = !$especial && AgendamentoModel::where(function ($q) use ($inicio, $fim) {
                 $q->where('data_inicio', '<', $fim)
                   ->where('data_fim', '>', $inicio);
             })
-            ->whereHas('servico', fn($q) => $q->where('visivel_cliente', 1))
+            ->where('especial', 0)
             ->when($ignoreId, fn($q) => $q->where('id', '!=', $ignoreId))
             ->exists();
 
@@ -400,8 +414,8 @@ class AgendaController extends Controller
                 }
             }
 
-            if ($servico->visivel_cliente) {
-                // Serviço visível: o pacote deve ser do próprio serviço.
+            if (!$especial) {
+                // Agendamento comum: o pacote deve ser do próprio serviço.
                 if (!$credito || (int) $credito->servico_id !== (int) $servico->id) {
                     return back()
                         ->withErrors(['servico_id' => 'O cliente não possui saldo disponível para este serviço.'])
@@ -417,6 +431,7 @@ class AgendaController extends Controller
         $agendamento->servico_id  = $servico->id;
         $agendamento->data_inicio = $inicio;
         $agendamento->data_fim    = $fim;
+        $agendamento->especial    = $especial;
         $agendamento->confirmado  = 0;
         $agendamento->save();
 
@@ -428,6 +443,7 @@ class AgendaController extends Controller
                 'tipo'        => 'reagendamento',
                 'user_id'     => $authUser->id,
                 'servico_id'  => $servico->id,
+                'especial'    => $especial,
                 'data_antiga' => $dataAntiga,
                 'data_nova'   => $inicio,
             ]);
@@ -576,6 +592,7 @@ class AgendaController extends Controller
                 'tipo'        => 'cancelamento',
                 'user_id'     => $user->id,
                 'servico_id'  => $agendamento->servico_id,
+                'especial'    => $agendamento->especial,
                 'data_antiga' => $agendamento->data_inicio,
             ]);
             $this->notificarStaffCancelamento($agendamento);

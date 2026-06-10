@@ -101,7 +101,7 @@
                         <div class="col-7">
                             <select id="credito-servico" class="form-select form-select-sm">
                                 @foreach($servicos->where('status', 1) as $s)
-                                    <option value="{{ $s->id }}">{{ $s->descricao }}{{ $s->visivel_cliente ? '' : ' [Staff]' }}</option>
+                                    <option value="{{ $s->id }}">{{ $s->descricao }}</option>
                                 @endforeach
                             </select>
                         </div>
@@ -196,13 +196,6 @@
                 <p class="fs-5 my-2">Duração do Serviço</p>
                 <x-app.select label="Horas" name="duracao_h" required="true" :options="['00'=>'00', '01'=>'01', '02'=>'02']" />
                 <x-app.select label="Minutos" name="duracao_m" required="true" :options="['00'=>'00', '15'=>'15', '30'=>'30', '45'=>'45']" />
-                <div class="form-check mt-3">
-                    <input class="form-check-input" type="checkbox" name="visivel_cliente" id="add_visivel_cliente" value="1" checked>
-                    <label class="form-check-label" for="add_visivel_cliente">
-                        Visível para clientes
-                    </label>
-                    <div class="form-text text-muted">Desmarque para serviços de 15 min (exclusivos para funcionários/admin).</div>
-                </div>
             </form>
         </x-app.modal>
 
@@ -216,13 +209,6 @@
                 <p class="fs-5 my-2">Duração do Serviço</p>
                 <x-app.select label="Horas" name="duracao_h_edt_servico" required="true" :options="['00'=>'00', '01'=>'01', '02'=>'02']" />
                 <x-app.select label="Minutos" name="duracao_m_edt_servico" required="true" :options="['00'=>'00', '15'=>'15', '30'=>'30', '45'=>'45']" />
-                <div class="form-check mt-3 mb-2">
-                    <input class="form-check-input" type="checkbox" name="visivel_cliente_servico" id="edt_visivel_cliente" value="1">
-                    <label class="form-check-label" for="edt_visivel_cliente">
-                        Visível para clientes
-                    </label>
-                    <div class="form-text text-muted">Desmarque para serviços de 15 min (exclusivos para funcionários/admin).</div>
-                </div>
                 <x-app.radio name="status_servico"
                     :options="[
                         '0' => 'INATIVO',
@@ -263,7 +249,6 @@
                                     <th scope="col">Serviço</th>
                                     <th scope="col">Duração</th>
                                     <th scope="col">Status</th>
-                                    <th scope="col">Visível</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -276,13 +261,6 @@
                                         <td>{{ $servico->descricao }}</td>
                                         <td>{{ $servico->duracao }}</td>
                                         <td class="text-{{ $servico->status == 0 ? 'danger' : 'success' }}">{{ $servico->status == 0 ? 'INATIVO' : 'ATIVO' }}</td>
-                                        <td>
-                                            @if($servico->visivel_cliente)
-                                                <span class="badge bg-success">Clientes</span>
-                                            @else
-                                                <span class="badge bg-danger">Staff</span>
-                                            @endif
-                                        </td>
                                     </tr>
                                 @endforeach
                             </tbody>
@@ -382,7 +360,6 @@
                     @csrf
                     @method('post')
                     <x-app.select label="Cliente" name="user_id" required="true" :options="$clientes->pluck('name', 'id')" />
-                    @php $temEspecial = $servicos->where('status', 1)->where('visivel_cliente', 0)->isNotEmpty(); @endphp
                     {{-- Serviço comum: um item por PACOTE contratado (com saldo restante/total).
                          O select não é enviado; ele alimenta os campos ocultos servico_id e credito_id. --}}
                     <div id="servico-normal-wrap" class="mb-3">
@@ -394,21 +371,39 @@
                             <div class="invalid-feedback d-block">{{ $message }}</div>
                         @enderror
                     </div>
-                    @if($temEspecial)
-                        {{-- Serviço especial (encaixe): não é um serviço comum; desconta de um pacote já existente do cliente. --}}
-                        <div class="form-check mb-3">
-                            <input class="form-check-input" type="checkbox" id="chk_especial">
-                            <label class="form-check-label" for="chk_especial">Serviço especial (encaixe)</label>
-                        </div>
-                    @endif
+                    {{-- Especial (encaixe): pode ser aplicado a qualquer serviço e colocado sobre
+                         outros agendamentos. O serviço (nome+duração) vem do pacote escolhido em
+                         "Descontar de"; no encaixe livre (sem desconto) é escolhido no catálogo. --}}
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="chk_especial">
+                        <label class="form-check-label" for="chk_especial">Especial (encaixe)</label>
+                    </div>
                     <input type="hidden" name="servico_id" id="servico_id" value="{{ old('servico_id') }}">
                     <input type="hidden" name="credito_id" id="credito_id" value="{{ old('credito_id') }}">
-                    {{-- Serviço especial: de qual pacote contratado descontar (ou encaixe livre) --}}
+                    {{-- Especial: de qual pacote contratado descontar (ou encaixe livre) --}}
                     <div id="credito-alvo-wrap" class="mb-3 d-none">
                         <label for="credito_alvo" class="form-label">Descontar de</label>
                         <select id="credito_alvo" class="form-select">
                             <option value="">Não descontar (encaixe livre)</option>
                         </select>
+                    </div>
+                    {{-- Encaixe livre (sem desconto): define o serviço pelo catálogo, só para
+                         o nome e a duração do horário. Visível apenas no especial sem pacote. --}}
+                    <div id="servico-livre-wrap" class="mb-3 d-none">
+                        <label for="servico_livre" class="form-label">Serviço (encaixe livre)</label>
+                        <select id="servico_livre" class="form-select">
+                            <option value="">Selecione o serviço</option>
+                            @foreach($servicos->where('status', 1)->where('visivel_cliente', 1) as $s)
+                                <option value="{{ $s->id }}">{{ $s->descricao }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    {{-- Especial: duração personalizada (min) para casos específicos.
+                         Vazio = usa a duração do serviço descontado/escolhido. --}}
+                    <div id="duracao-especial-wrap" class="mb-3 d-none">
+                        <label for="duracao_especial" class="form-label">Duração personalizada (min)</label>
+                        <input type="number" min="1" step="1" class="form-control" id="duracao_especial" name="duracao_min" placeholder="Vazio = duração do serviço">
+                        <small class="text-muted">Opcional. Se vazio, usa a duração do serviço descontado.</small>
                     </div>
                     <input type="hidden" name="data_inicio" id="data_inicio" />
                     <input type="hidden" name="data_fim" id="data_fim" />
@@ -572,14 +567,14 @@
                                     <div id="dia-{{ $dataKey }}" class="collapse {{ $isHoje ? 'show' : '' }} pt-2">
                                         @foreach ($listaDia as $consulta)
                                             @php $isStaff = auth()->user()->adm == 1 || auth()->user()->func == 1; @endphp
-                                            <div class="consulta-card {{ !$consulta->confirmado ? 'consulta-pendente' : '' }} {{ !optional($consulta->servico)->visivel_cliente ? 'consulta-especial' : '' }} d-flex {{ $isStaff ? 'justify-content-between align-items-center' : 'flex-column' }}" data-consulta-id="{{ $consulta->id }}">
+                                            <div class="consulta-card {{ !$consulta->confirmado ? 'consulta-pendente' : '' }} {{ $consulta->especial ? 'consulta-especial' : '' }} d-flex {{ $isStaff ? 'justify-content-between align-items-center' : 'flex-column' }}" data-consulta-id="{{ $consulta->id }}">
                                                 <div class="d-flex flex-grow-1" @if($isStaff) onclick="editarConsulta({{ $consulta->id }})" style="cursor: pointer" @endif>
                                                     <div class="me-3 text-center">
                                                         <div class="consulta-hora">
                                                             {{ \Carbon\Carbon::parse($consulta->data_inicio)->format('H:i') }} <br>às<br>
                                                             {{ \Carbon\Carbon::parse($consulta->data_fim)->format('H:i') }}
                                                         </div>
-                                                        @if(!optional($consulta->servico)->visivel_cliente)
+                                                        @if($consulta->especial)
                                                             <div class="mt-2"><span class="badge bg-danger">Horário especial</span></div>
                                                         @endif
                                                     </div>
@@ -625,7 +620,7 @@
                                                         <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#ffffff"><path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z"/></svg>
                                                     </button>
                                                 @elseif($consulta->data_inicio->isFuture())
-                                                    @php $consultaEhStaff = !(optional($consulta->servico)->visivel_cliente); @endphp
+                                                    @php $consultaEhStaff = (bool) $consulta->especial; @endphp
                                                     <div class="d-flex gap-2 mt-3">
                                                         <button class="btn btn-sm btn-outline-primary"
                                                                 data-id="{{ $consulta->id }}"
@@ -691,6 +686,7 @@
         function abrirNovoAgendamento() {
             document.getElementById('agendamento_id').value = '';
             document.getElementById('user_id').value = '';
+            document.getElementById('duracao_especial').value = '';
             popularSelectServicos('');
             document.getElementById('dia_selecionado').value = '';
             document.getElementById('hora_selecionada').value = '';
@@ -719,8 +715,24 @@
                     // Navegar o calendário para o mês da consulta
                     dataAtual = new Date(c.data_inicio.replace(' ', 'T'));
 
+                    // Duração personalizada: se for especial e a duração salva diferir do
+                    // padrão do serviço, pré-preenche o campo (senão deixa vazio = padrão).
+                    const durField = document.getElementById('duracao_especial');
+                    if (durField) {
+                        durField.value = '';
+                        if (c.especial) {
+                            const durMin = Math.round(
+                                (new Date(c.data_fim.replace(' ', 'T')) - new Date(c.data_inicio.replace(' ', 'T'))) / 60000
+                            );
+                            const s = SERVICOS.find(x => x.id == c.servico_id);
+                            let defMin = null;
+                            if (s) { const [h, m] = s.duracao.split(':').map(Number); defMin = h * 60 + m; }
+                            if (defMin === null || durMin !== defMin) durField.value = durMin;
+                        }
+                    }
+
                     // Carrega os serviços do cliente (forçando o serviço/pacote atual) antes de abrir
-                    popularSelectServicos(c.user_id, { servicoId: c.servico_id, creditoId: c.credito_servico_id, ordinal: c.credito_ordinal }, () => {
+                    popularSelectServicos(c.user_id, { servicoId: c.servico_id, creditoId: c.credito_servico_id, ordinal: c.credito_ordinal, especial: c.especial }, () => {
                         new bootstrap.Modal(document.getElementById('modal-add-agenda')).show();
 
                         carregarMes().then(() => {
@@ -957,13 +969,6 @@
         // Pacotes do cliente atualmente carregados (alimentam o select de serviço e o "Descontar de").
         let creditosClienteAtual = [];
 
-        // Serviço especial (staff): usado quando o checkbox "Serviço especial" está marcado.
-        function servicoEspecial() {
-            return (typeof SERVICOS !== 'undefined')
-                ? (SERVICOS.find(s => !s.visivel_cliente && s.status == 1) || null)
-                : null;
-        }
-
         // Limpa a seleção de dia/horário (a duração depende do serviço escolhido).
         function resetSelecaoHorario() {
             document.getElementById('horarios-erro').textContent = '';
@@ -976,14 +981,21 @@
         }
 
         // Sincroniza os campos ocultos servico_id / credito_id conforme o modo:
-        // - especial marcado   → servico_id = serviço especial; credito_id = pacote do "Descontar de" (vazio = livre)
-        // - especial desmarcado → vêm do pacote escolhido no select (valor "c-{pacoteId}")
+        // - especial + pacote → servico_id vem do próprio pacote do "Descontar de"; credito_id = pacote
+        // - especial + livre  → servico_id vem do catálogo (#servico_livre); credito_id vazio
+        // - comum             → vêm do pacote escolhido no select (valor "c-{pacoteId}")
         function sincronizarAgendamento() {
             const chk = document.getElementById('chk_especial');
             if (chk && chk.checked) {
-                const esp = servicoEspecial();
-                document.getElementById('servico_id').value = esp ? esp.id : '';
-                document.getElementById('credito_id').value = document.getElementById('credito_alvo').value;
+                const alvo = document.getElementById('credito_alvo').value;
+                if (alvo) {
+                    const c = creditosClienteAtual.find(x => x.id == alvo);
+                    document.getElementById('servico_id').value = c ? String(c.servico_id) : '';
+                    document.getElementById('credito_id').value = alvo;
+                } else {
+                    document.getElementById('servico_id').value = document.getElementById('servico_livre').value;
+                    document.getElementById('credito_id').value = '';
+                }
                 return;
             }
             const sel = document.getElementById('servico_sel');
@@ -997,16 +1009,23 @@
             document.getElementById('credito_id').value = creditoId;
         }
 
-        // Mostra/esconde os campos conforme o checkbox "Serviço especial".
+        // Mostra/esconde os campos conforme o checkbox "Especial". O catálogo de
+        // serviço (encaixe livre) só aparece no especial quando não há pacote a descontar.
         function aplicarModoEspecial() {
             const chk = document.getElementById('chk_especial');
             const sel = document.getElementById('servico_sel');
+            const alvo = document.getElementById('credito_alvo');
             const wrapNormal = document.getElementById('servico-normal-wrap');
             const wrapAlvo   = document.getElementById('credito-alvo-wrap');
+            const wrapLivre  = document.getElementById('servico-livre-wrap');
+            const wrapDur    = document.getElementById('duracao-especial-wrap');
             const especial = !!(chk && chk.checked);
+            const semDesconto = especial && !(alvo && alvo.value);
             if (wrapNormal) wrapNormal.classList.toggle('d-none', especial);
             if (sel) sel.required = !especial;
             if (wrapAlvo) wrapAlvo.classList.toggle('d-none', !especial);
+            if (wrapLivre) wrapLivre.classList.toggle('d-none', !semDesconto);
+            if (wrapDur) wrapDur.classList.toggle('d-none', !especial);
             sincronizarAgendamento();
         }
 
@@ -1034,9 +1053,9 @@
 
                 // O número exibido é a PRÓXIMA unidade a consumir (1ª, 2ª, ... de N),
                 // ou seja usadas+1 — coerente com o que o card mostrará após agendar.
-                // Select de serviço comum: pacotes de serviços visíveis com saldo
+                // Select de serviço comum: todos os pacotes com saldo
                 let opts = '<option value="">Selecione o serviço</option>';
-                comSaldo.filter(c => c.visivel_cliente).forEach(c => {
+                comSaldo.forEach(c => {
                     opts += `<option value="c-${c.id}">${c.descricao} (${c.usadas + 1}/${c.quantidade})</option>`;
                 });
 
@@ -1046,10 +1065,8 @@
                     optsAlvo += `<option value="${c.id}">${c.descricao} (${c.usadas + 1}/${c.quantidade})</option>`;
                 });
 
-                // Edição: o agendamento é especial se o serviço for o serviço staff
-                const esp = servicoEspecial();
-                const ehEspecial = forcar && forcar.servicoId && esp
-                    && String(forcar.servicoId) === String(esp.id);
+                // Edição: o agendamento é especial conforme a flag salva no agendamento.
+                const ehEspecial = !!(forcar && forcar.especial);
 
                 // Em edição o pacote pode já estar esgotado por ESTA consulta; usa o
                 // ordinal real da consulta (vindo do backend) em vez de usadas+1.
@@ -1078,6 +1095,11 @@
 
                 if (ehEspecial) {
                     if (alvo) alvo.value = forcar.creditoId ? String(forcar.creditoId) : '';
+                    // Encaixe livre (sem desconto): reabre o serviço no catálogo
+                    if (!forcar.creditoId) {
+                        const livre = document.getElementById('servico_livre');
+                        if (livre && forcar.servicoId) livre.value = String(forcar.servicoId);
+                    }
                 } else if (forcar && forcar.creditoId) {
                     sel.value = `c-${forcar.creditoId}`;
                 }
@@ -1113,9 +1135,23 @@
             resetSelecaoHorario();
         });
 
-        // Ao trocar o pacote no "Descontar de" (especial), grava no campo enviado.
+        // Ao trocar o pacote no "Descontar de" (especial): sincroniza servico/credito,
+        // alterna o catálogo de encaixe livre e reinicia o horário (o serviço pode mudar
+        // a duração dos slots).
         document.getElementById('credito_alvo')?.addEventListener('change', function () {
-            document.getElementById('credito_id').value = this.value;
+            aplicarModoEspecial();
+            resetSelecaoHorario();
+        });
+
+        // Encaixe livre: ao escolher o serviço no catálogo, sincroniza e reinicia o horário.
+        document.getElementById('servico_livre')?.addEventListener('change', function () {
+            sincronizarAgendamento();
+            resetSelecaoHorario();
+        });
+
+        // Duração personalizada (especial): muda a duração dos slots, reinicia o horário.
+        document.getElementById('duracao_especial')?.addEventListener('input', function () {
+            resetSelecaoHorario();
         });
 
         // ── Auto-atualização parcial (só funcionário/adm) ────────────────────
@@ -1252,8 +1288,6 @@
 
             $('[name="status_servico"]').prop('checked', false);
             $(`#status_servico_${servico.status}`).prop('checked', true);
-
-            $('#edt_visivel_cliente').prop('checked', servico.visivel_cliente == 1);
 
             $('#modal-edt-servico').modal('show');
         }
@@ -1562,11 +1596,11 @@
                         nomeServico.textContent = c.servico_display ?? (c.servico?.descricao ?? '');
 
                         html += `
-                            <div class="consulta-card ${c.confirmado ? '' : 'consulta-pendente'} ${(c.servico && !c.servico.visivel_cliente) ? 'consulta-especial' : ''} d-flex justify-content-between align-items-center" data-consulta-id="${c.id}">
+                            <div class="consulta-card ${c.confirmado ? '' : 'consulta-pendente'} ${c.especial ? 'consulta-especial' : ''} d-flex justify-content-between align-items-center" data-consulta-id="${c.id}">
                                 <div class="d-flex flex-grow-1" onclick="editarConsulta(${c.id})" style="cursor:pointer">
                                     <div class="me-3 text-center">
                                         <div class="consulta-hora">${inicio} <br>às<br> ${fim}</div>
-                                        ${(c.servico && !c.servico.visivel_cliente) ? '<div class="mt-2"><span class="badge bg-danger">Horário especial</span></div>' : ''}
+                                        ${c.especial ? '<div class="mt-2"><span class="badge bg-danger">Horário especial</span></div>' : ''}
                                     </div>
                                     <div>
                                         ${statusConfirmacaoBadge(c)}

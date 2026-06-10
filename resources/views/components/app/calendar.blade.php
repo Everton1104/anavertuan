@@ -285,10 +285,19 @@
         campoServico.classList.remove('is-invalid');
         document.getElementById('horarios').innerHTML = "<p>Carregando...</p>";
 
+        // Especial (encaixe): pode sobrepor outros agendamentos e ter duração
+        // personalizada. Os campos só existem no formulário do staff.
+        const chkEsp = document.getElementById('chk_especial');
+        const especial = chkEsp && chkEsp.checked ? 1 : 0;
+        const durEsp = document.getElementById('duracao_especial');
+        const duracao_min = (especial && durEsp && durEsp.value) ? durEsp.value : null;
+
         axios.get('/api/horarios/' + data, {
             params: {
                 servico_id,
                 ignore_id: document.getElementById('agendamento_id')?.value ?? null,
+                especial,
+                duracao_min,
             }
         })
         .then(response => mostrarHorarios(response.data))
@@ -352,10 +361,19 @@
     function calcularDataFim(dataInicio) {
         const servico_id = document.getElementById('servico_id').value;
         const servico = SERVICOS.find(s => s.id == servico_id);
-        if (!servico) return;
 
-        const [h, m] = servico.duracao.split(':').map(Number);
-        const minutos = h * 60 + m;
+        // Especial com duração personalizada usa o valor digitado; senão, a do serviço.
+        const chkEsp = document.getElementById('chk_especial');
+        const durEsp = document.getElementById('duracao_especial');
+        let minutos;
+        if (chkEsp && chkEsp.checked && durEsp && durEsp.value) {
+            minutos = parseInt(durEsp.value, 10);
+        } else {
+            if (!servico) return;
+            const [h, m] = servico.duracao.split(':').map(Number);
+            minutos = h * 60 + m;
+        }
+        if (!minutos || minutos <= 0) return;
 
         const inicio = new Date(dataInicio.replace(' ', 'T'));
         if (isNaN(inicio)) return;

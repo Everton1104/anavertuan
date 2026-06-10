@@ -2,7 +2,7 @@
     <div class="d-flex justify-content-between align-items-start p-2 border-bottom" id="aviso-{{ $aviso->id }}">
         <div>
             @if($aviso->tipo === 'cancelamento')
-                @php $cancEhStaff = !(optional($aviso->servico)->visivel_cliente); @endphp
+                @php $cancEhStaff = (bool) $aviso->especial; @endphp
                 <strong>{{ ucfirst($aviso->user->name) }}</strong> cancelou a consulta de
                 <em>{{ $aviso->servico->descricao }}</em> do dia
                 {{ $aviso->data_antiga->format('d/m/Y') }} às {{ $aviso->data_antiga->format('H:i') }}.
@@ -26,7 +26,7 @@
                 <em>{{ $aviso->servico->descricao }}</em> no dia
                 {{ $aviso->data_antiga->format('d/m/Y') }} às {{ $aviso->data_antiga->format('H:i') }}. ✅
             @elseif($aviso->tipo === 'reagendamento_solicitado')
-                @php $avisoEhStaff = !(optional($aviso->servico)->visivel_cliente); @endphp
+                @php $avisoEhStaff = (bool) $aviso->especial; @endphp
                 <strong>{{ ucfirst($aviso->user->name) }}</strong> solicitou reagendamento de
                 <em>{{ $aviso->servico->descricao }}</em> marcado para
                 {{ $aviso->data_antiga->format('d/m/Y') }} às {{ $aviso->data_antiga->format('H:i') }}. 🔄

@@ -7,9 +7,10 @@ use Illuminate\Database\Eloquent\Model;
 class Aviso extends Model
 {
     protected $table = 'avisos';
-    protected $fillable = ['tipo', 'user_id', 'servico_id', 'data_antiga', 'data_nova', 'dispensado_at'];
+    protected $fillable = ['tipo', 'user_id', 'servico_id', 'especial', 'data_antiga', 'data_nova', 'dispensado_at'];
 
     protected $casts = [
+        'especial'      => 'boolean',
         'data_antiga'   => 'datetime',
         'data_nova'     => 'datetime',
         'dispensado_at' => 'datetime',

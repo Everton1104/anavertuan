@@ -77,7 +77,10 @@ class AgendamentoModel extends Model
             if ($credito->servico_id != $this->servico_id) {
                 $nome .= ' - ' . ($credito->servico->descricao ?? '');
             }
-            $nome .= ' (' . $credito->ordinalDe($this) . '/' . $credito->quantidade . ')';
+            // Pacote de unidade única (1/1): mostra só o nome, sem o "(1/1)" redundante.
+            if ($credito->quantidade > 1) {
+                $nome .= ' (' . $credito->ordinalDe($this) . '/' . $credito->quantidade . ')';
+            }
         }
 
         return $nome;

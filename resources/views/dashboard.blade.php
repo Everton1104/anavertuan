@@ -378,6 +378,9 @@
                         <input class="form-check-input" type="checkbox" id="chk_especial">
                         <label class="form-check-label" for="chk_especial">Especial (encaixe)</label>
                     </div>
+                    {{-- O checkbox não é enviado no POST; este campo oculto carrega a flag
+                         (sincronizado em aplicarModoEspecial). --}}
+                    <input type="hidden" name="especial" id="especial_flag" value="0">
                     <input type="hidden" name="servico_id" id="servico_id" value="{{ old('servico_id') }}">
                     <input type="hidden" name="credito_id" id="credito_id" value="{{ old('credito_id') }}">
                     {{-- Especial: de qual pacote contratado descontar (ou encaixe livre) --}}
@@ -401,8 +404,20 @@
                     {{-- Especial: duração personalizada (min) para casos específicos.
                          Vazio = usa a duração do serviço descontado/escolhido. --}}
                     <div id="duracao-especial-wrap" class="mb-3 d-none">
-                        <label for="duracao_especial" class="form-label">Duração personalizada (min)</label>
-                        <input type="number" min="1" step="1" class="form-control" id="duracao_especial" name="duracao_min" placeholder="Vazio = duração do serviço">
+                        <label for="duracao_especial" class="form-label">Duração personalizada</label>
+                        {{-- Valores fixos em incrementos de 15 min (em minutos) para não
+                             conflitar com a grade de horários. Vazio = duração do serviço. --}}
+                        <select class="form-select" id="duracao_especial" name="duracao_min">
+                            <option value="">Padrão do serviço</option>
+                            @for($m = 15; $m <= 240; $m += 15)
+                                @php
+                                    $h   = intdiv($m, 60);
+                                    $min = $m % 60;
+                                    $lbl = ($h === 0 ? '00' : $h) . ':' . str_pad($min, 2, '0', STR_PAD_LEFT);
+                                @endphp
+                                <option value="{{ $m }}">{{ $lbl }}</option>
+                            @endfor
+                        </select>
                         <small class="text-muted">Opcional. Se vazio, usa a duração do serviço descontado.</small>
                     </div>
                     <input type="hidden" name="data_inicio" id="data_inicio" />
@@ -1020,6 +1035,9 @@
             const wrapLivre  = document.getElementById('servico-livre-wrap');
             const wrapDur    = document.getElementById('duracao-especial-wrap');
             const especial = !!(chk && chk.checked);
+            // Sincroniza a flag enviada no POST (o checkbox não tem name próprio).
+            const flag = document.getElementById('especial_flag');
+            if (flag) flag.value = especial ? '1' : '0';
             const semDesconto = especial && !(alvo && alvo.value);
             if (wrapNormal) wrapNormal.classList.toggle('d-none', especial);
             if (sel) sel.required = !especial;
@@ -1150,7 +1168,7 @@
         });
 
         // Duração personalizada (especial): muda a duração dos slots, reinicia o horário.
-        document.getElementById('duracao_especial')?.addEventListener('input', function () {
+        document.getElementById('duracao_especial')?.addEventListener('change', function () {
             resetSelecaoHorario();
         });
 

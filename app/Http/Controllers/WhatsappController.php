@@ -109,13 +109,19 @@ class WhatsappController extends Controller
                              ->locale('pt_BR')
                              ->translatedFormat('d \d\e F');
         $hora          = Carbon::parse($agendamento->data_inicio)->format('H:i');
-        $endereco      = env('WHATSAPP_ENDERECO', 'R. 23 de Maio, 790 - Vila Vianelo, Jundiaí - SP, 13207-070');
+        $endereco      = env('WHATSAPP_ENDERECO', 'Rua 23 de Maio, n° 790, Vila Vianelo, Jundiaí - Sala n.º 35 - 3° andar Bloco A "Condomínio Centro Comercial Tebas"');
         $maps          = env('WHATSAPP_MAPS_LINK', 'https://maps.app.goo.gl/gPbt9ZuejqqJRrA56');
 
         self::enviarMsg($phoneId, $number,
             "Perfeito, {$nome}! ✅ Sua presença está confirmada para o dia *{$data}* às *{$hora}*.\n\n"
-            . "Muito obrigado por confirmar! Estamos te esperando na {$nomeComercial}. Até lá! 😊\n\n"
-            . "📍 *Endereço:*\n{$endereco}\n{$maps}"
+            . "Muito obrigado por confirmar! Estamos te esperando na {$nomeComercial}. Até lá! 😊"
+        );
+
+        // Mensagem separada com o endereço da clínica e um botão para abrir a rota no Google Maps.
+        self::enviarMsgBotaoUrl($phoneId, $number,
+            "📍 *Endereço da clínica:*\n{$endereco}",
+            $maps,
+            'Ver rota no Google Maps'
         );
     }
 
@@ -207,6 +213,38 @@ class WhatsappController extends Controller
         ]);
 
         self::log($numero, Auth::id(), $msg, null, $business_phone_number_id);
+    }
+
+    // Mensagem interativa com um botão de URL (cta_url) — ex.: abrir rota no Google Maps.
+    public static function enviarMsgBotaoUrl($business_phone_number_id, $numero, $msg, $url, $tituloBotao = 'Abrir')
+    {
+        try {
+            $client = new \GuzzleHttp\Client();
+            $client->request('POST', "https://graph.facebook.com/v25.0/{$business_phone_number_id}/messages", [
+                'headers' => ['Authorization' => 'Bearer ' . env('GRAPH_API_TOKEN')],
+                'json'    => [
+                    'messaging_product' => 'whatsapp',
+                    'to'                => $numero,
+                    'type'              => 'interactive',
+                    'interactive'       => [
+                        'type'   => 'cta_url',
+                        'body'   => ['text' => $msg],
+                        'action' => [
+                            'name'       => 'cta_url',
+                            'parameters' => [
+                                'display_text' => $tituloBotao,
+                                'url'          => $url,
+                            ],
+                        ],
+                    ],
+                ],
+            ]);
+
+            self::log($numero, Auth::id(), $msg, null, $business_phone_number_id);
+            return ['sucesso' => 1];
+        } catch (\Throwable $e) {
+            return ['erro' => 1, 'msg' => $e->getMessage()];
+        }
     }
 
     public static function enviarMsgSimNaoCancel($business_phone_number_id, $numero, $msg, $id = 0, $title1 = 'Sim', $title2 = 'Não', $title3 = 'Cancelar')

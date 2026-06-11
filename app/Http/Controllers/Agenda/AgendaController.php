@@ -489,7 +489,11 @@ class AgendaController extends Controller
             if ($credito->servico_id != $agendamento->servico_id) {
                 $servico = $credito->servico->descricao ?? $servico;
             }
-            $servico .= ' (' . $credito->ordinalDe($agendamento) . '/' . $credito->quantidade . ')';
+            // Pacote de unidade única (1/1): mostra só o nome, sem o "(1/1)" redundante
+            // (mesma regra de AgendamentoModel::getServicoDisplayAttribute).
+            if ($credito->quantidade > 1) {
+                $servico .= ' (' . $credito->ordinalDe($agendamento) . '/' . $credito->quantidade . ')';
+            }
         }
 
         if ($isEdicao) {

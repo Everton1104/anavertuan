@@ -137,12 +137,14 @@ class AplicacoesController extends Controller
         $dataAplicacao = null;
 
         if (!empty($data['agendamento_id'])) {
-            $ag = AgendamentoModel::find($data['agendamento_id']);
+            $ag = AgendamentoModel::with('creditoServico')->find($data['agendamento_id']);
             if ($ag) {
                 $dataAplicacao = $ag->data_inicio->toDateString();
-                // Extrai número da dose do nome do serviço: "(X/5)" → X
-                if (preg_match('/\((\d+)\/\d+\)/', $ag->servico->descricao ?? '', $m)) {
-                    $numeroDose = (int) $m[1];
+                // Número da dose = posição do agendamento no pacote (ex.: 2ª de 5 → 2).
+                // A posição passou a ser calculada pelo crédito; antes saía do nome do
+                // serviço (regex "(X/5)"), que não existe mais na descrição.
+                if ($ag->creditoServico) {
+                    $numeroDose = $ag->creditoServico->ordinalDe($ag);
                 }
             }
         }

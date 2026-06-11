@@ -24,12 +24,17 @@ Route::get('/dashboard', function () {
     $servicos = ServicosModel::where('excluido', '0')->get();
     $mesAtual = now()->locale('pt_BR')->translatedFormat('F Y');
 
+    // Limita a um período visível (mês anterior em diante) em vez de carregar TODO o
+    // histórico a cada acesso — a consulta crescia sem limite. Para ver registros
+    // antigos use a busca (agenda.search), que filtra por nome do cliente.
+    $inicioJanela = now()->startOfMonth()->subMonth();
+
     $consultasQuery = AgendamentoModel::with([
         'user',
         'servico',
         'lembretes',
         'creditoServico' => fn($q) => $q->with(['servico', 'agendamentos:id,credito_servico_id'])->withCount('agendamentos'),
-    ])->orderBy('data_inicio');
+    ])->where('data_inicio', '>=', $inicioJanela)->orderBy('data_inicio');
 
     if (!$user->adm && !$user->func) {
         $consultasQuery->where('user_id', $user->id);
@@ -76,7 +81,7 @@ Route::post('editar-servico', [ServicoController::class, 'editar'])->middleware(
 
 
 // ── WhatsApp webhook (público) ────────────────────────────────────────────────
-Route::get('/whatsapp/webhook',  [WhatsappController::class, 'virifyToken']);
+Route::get('/whatsapp/webhook',  [WhatsappController::class, 'verifyToken']);
 Route::post('/whatsapp/webhook', [WhatsappController::class, 'getMsgs']);
 
 // ── WhatsApp verificação de número ────────────────────────────────────────────

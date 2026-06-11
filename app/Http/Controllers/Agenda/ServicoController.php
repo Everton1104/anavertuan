@@ -17,7 +17,6 @@ class ServicoController extends Controller
             'descricao'       => ['required', 'string', 'max:255', 'min:5'],
             'duracao_h'       => ['required', 'numeric'],
             'duracao_m'       => ['required', 'numeric'],
-            'visivel_cliente' => ['nullable', 'boolean'],
         ]);
 
         // "Serviço staff" foi descontinuado: o encaixe agora é a flag `especial` do
@@ -85,7 +84,6 @@ class ServicoController extends Controller
             'duracao_h_edt_servico'   => ['required', 'numeric'],
             'duracao_m_edt_servico'   => ['required', 'numeric'],
             'status_servico'          => ['required', 'numeric'],
-            'visivel_cliente_servico' => ['nullable', 'boolean'],
         ]);
 
         // Serviço staff descontinuado (ver store): todo serviço é normal/visível.

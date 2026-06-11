@@ -30,6 +30,11 @@ class WhatsappController extends Controller
 
     public function getMsgs(Request $request)
     {
+        if (!$this->assinaturaValida($request)) {
+            \Log::channel('single')->warning('[WA-WEBHOOK] assinatura X-Hub-Signature-256 inválida');
+            return response()->json(['error' => 'invalid signature'], 403);
+        }
+
         \Log::channel('single')->info('[WA-WEBHOOK]', ['payload' => $request->all()]);
 
         $business_phone_number_id = $request['entry'][0]['changes'][0]['value']['metadata']['phone_number_id'] ?? 0;
@@ -66,6 +71,27 @@ class WhatsappController extends Controller
         }
     }
 
+    // Confirma que o POST veio mesmo da Meta: o corpo bruto é assinado por ela
+    // (HMAC-SHA256 com o App Secret) no header X-Hub-Signature-256. Sem isso,
+    // qualquer um que descubra a URL poderia injetar eventos falsos.
+    // Se WHATSAPP_APP_SECRET não estiver configurado, não bloqueia (fail-open),
+    // para não derrubar ambientes ainda não configurados.
+    private function assinaturaValida(Request $request): bool
+    {
+        $appSecret = env('WHATSAPP_APP_SECRET');
+        if (!$appSecret) {
+            return true;
+        }
+
+        $assinatura = (string) $request->header('X-Hub-Signature-256', '');
+        if (!str_starts_with($assinatura, 'sha256=')) {
+            return false;
+        }
+
+        $esperado = 'sha256=' . hash_hmac('sha256', $request->getContent(), $appSecret);
+        return hash_equals($esperado, $assinatura);
+    }
+
     // ── Tratamento de respostas de botões ────────────────────────────────────
 
     // Pré-confirmação: cliente respondeu o lembrete da véspera.
@@ -99,9 +125,21 @@ class WhatsappController extends Controller
         $agendamento = AgendamentoModel::with('user')->find($agendamentoId);
         if (!$agendamento) return;
 
+        // Idempotência: o WhatsApp mantém o botão clicável após o clique. Se já
+        // está confirmado, ignora cliques repetidos (não reenvia as mensagens).
+        if ($agendamento->confirmado) return;
+
         $agendamento->confirmado    = true;
         $agendamento->confirmado_em = now();
         $agendamento->save();
+
+        // Cliente decidiu confirmar: dispensa qualquer pedido de reagendamento em
+        // aberto (evita estado contraditório se antes havia clicado em "reagendar").
+        Aviso::where('tipo', 'reagendamento_solicitado')
+            ->where('user_id', $agendamento->user_id)
+            ->where('data_antiga', $agendamento->data_inicio)
+            ->whereNull('dispensado_at')
+            ->update(['dispensado_at' => now()]);
 
         $nome          = ucfirst($agendamento->user->name ?? 'você');
         $nomeComercial = env('WHATSAPP_NOME_COMERCIAL', config('app.name'));
@@ -117,11 +155,12 @@ class WhatsappController extends Controller
             . "Muito obrigado por confirmar! Estamos te esperando na {$nomeComercial}. Até lá! 😊"
         );
 
-        // Mensagem separada com o endereço da clínica e um botão para abrir a rota no Google Maps.
-        self::enviarMsgBotaoUrl($phoneId, $number,
-            "📍 *Endereço da clínica:*\n{$endereco}",
-            $maps,
-            'Ver rota no Google Maps'
+        // Mensagem separada com o endereço da clínica + link do Google Maps em texto.
+        // (O botão interativo cta_url não estava sendo entregue; link em texto é
+        // clicável no WhatsApp e usa o mesmo enviarMsg que funciona de forma confiável.)
+        self::enviarMsg($phoneId, $number,
+            "📍 *Endereço da clínica:*\n{$endereco}\n\n"
+            . "🗺️ Como chegar: {$maps}"
         );
     }
 
@@ -129,6 +168,23 @@ class WhatsappController extends Controller
     {
         $agendamento = AgendamentoModel::with(['user', 'servico'])->find($agendamentoId);
         if (!$agendamento) return;
+
+        // Idempotência: se já há um pedido de reagendamento em aberto para esta
+        // consulta, ignora o clique repetido (não duplica o aviso nem re-notifica a admin).
+        $jaSolicitado = Aviso::where('tipo', 'reagendamento_solicitado')
+            ->where('user_id', $agendamento->user_id)
+            ->where('data_antiga', $agendamento->data_inicio)
+            ->whereNull('dispensado_at')
+            ->exists();
+        if ($jaSolicitado) return;
+
+        // Cliente quer trocar de horário: desfaz uma eventual confirmação anterior
+        // (evita estado contraditório se antes havia clicado em "confirmar").
+        if ($agendamento->confirmado) {
+            $agendamento->confirmado    = false;
+            $agendamento->confirmado_em = null;
+            $agendamento->save();
+        }
 
         Aviso::create([
             'tipo'        => 'reagendamento_solicitado',
@@ -145,14 +201,8 @@ class WhatsappController extends Controller
             "Tudo bem, {$nome}! 🔄 Para escolher um novo horário, acesse o link abaixo e faça login com o seu WhatsApp:\n\n{$appUrl}/dashboard\n\nSe preferir, nossa equipe pode te ajudar a encontrar o melhor horário. 😊"
         );
 
-        $adminNumber = env('WHATSAPP_ADMIN_NUMBER');
-        if ($adminNumber) {
-            $nomeAdmin = ucfirst($agendamento->user->name ?? 'Cliente');
-            $data      = Carbon::parse($agendamento->data_inicio)->format('d/m/Y \à\s H:i');
-            self::enviarMsg($phoneId, $adminNumber,
-                "⚠️ {$nomeAdmin} quer reagendar a consulta de {$data}."
-            );
-        }
+        // O aviso ao número de atendimento é enviado automaticamente pelo AvisoObserver
+        // ao criar o Aviso 'reagendamento_solicitado' acima (evita duplicar aqui).
     }
 
     // ── Envio de mensagens ────────────────────────────────────────────────────

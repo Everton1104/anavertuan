@@ -69,7 +69,7 @@ Route::post('agenda/{id}/confirmar', [AgendaController::class, 'confirmar'])->mi
 Route::post('agenda/{id}/reenviar-lembrete', [AgendaController::class, 'reenviarLembrete'])->middleware('auth')->name('agenda.reenviar-lembrete');
 Route::post('aviso/{id}/dispensar', [AgendaController::class, 'dispensarAviso'])->middleware('auth')->name('aviso.dispensar');
 Route::get('avisos-parcial', [AgendaController::class, 'avisosParcial'])->middleware('auth')->name('avisos.parcial');
-Route::get('agenda-search', [AgendaController::class, 'search'])->name('agenda.search');
+Route::get('agenda-search', [AgendaController::class, 'search'])->middleware('auth')->name('agenda.search');
 Route::resource('servico', ServicoController::class)->middleware('auth');
 Route::post('delete-servico', [ServicoController::class, 'delete'])->middleware('auth')->name('delete-servico');
 Route::post('editar-servico', [ServicoController::class, 'editar'])->middleware('auth')->name('editar-servico');

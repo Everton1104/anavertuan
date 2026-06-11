@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "input=$(cat); if printf '%s' \"$input\" | grep -qiE 'lembretes:enviar|graph\\.facebook\\.com|(enviarModelo|enviarMsg|enviarLembretes?|enviarCodigoVerificacao|reenviarLembrete)[[:space:]]*\\(' ; then printf '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"Guardrail de producao: este comando dispararia mensagem WhatsApp real a clientes (lembretes:enviar / enviar*( / graph.facebook.com). Execucao bloqueada. Se for realmente intencional, o usuario deve rodar manualmente ou ajustar .claude/settings.json.\"}}'; fi",
+            "command": "input=$(cat); if printf '%s' \"$input\" | grep -qiE 'lembretes:enviar|(enviarModelo|enviarMsg|enviarLembretes?|enviarCodigoVerificacao|reenviarLembrete)[[:space:]]*\\(' ; then printf '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"Guardrail de producao: envio em massa/app-level de WhatsApp (lembretes:enviar / enviar*( ) bloqueado.\"}}'; elif printf '%s' \"$input\" | grep -qiE 'graph\\.facebook\\.com' && ! printf '%s' \"$input\" | grep -q '5511997646569' ; then printf '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"Guardrail de producao: este comando dispararia WhatsApp real a clientes (graph.facebook.com sem o numero de teste 5511997646569). Execucao bloqueada. Use o numero de teste, rode manualmente ou ajuste .claude/settings.json.\"}}'; fi",
             "statusMessage": "Checando envio de WhatsApp..."
           }
         ]

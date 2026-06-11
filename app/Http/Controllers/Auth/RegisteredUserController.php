@@ -66,6 +66,8 @@ class RegisteredUserController extends Controller
 
     public function delete(Request $request)
     {
+        abort_unless(auth()->user()->adm || auth()->user()->func, 403);
+
         $validation = Validator::make($request->all(), [
             'id' => 'required|integer|gt:1',
         ]);
@@ -74,23 +76,35 @@ class RegisteredUserController extends Controller
             return redirect()->back()->with('msgErro', 'Falha ao excluir usuário!');
         }
 
-        User::find($request['id'])->update(['excluido' => 1]);
+        $user = User::find($request['id']);
+        if (!$user) {
+            return redirect()->back()->with('msgErro', 'Usuário não encontrado!');
+        }
+
+        $user->update(['excluido' => 1]);
         return redirect()->back()->with('msg', 'Usuario excluido com sucesso!');
     }
 
     public function editar(Request $request)
     {
+        abort_unless(auth()->user()->adm || auth()->user()->func, 403);
+
         $request->validate([
             'id'           => 'required|integer',
             'nome_edt'     => 'required|string|max:255',
             'whatsapp_edt' => 'nullable|string|max:20',
         ]);
 
+        $user = User::find($request['id']);
+        if (!$user) {
+            return redirect()->back()->with('msgErro', 'Usuário não encontrado!');
+        }
+
         if ($request->filled('senha_edt')) {
             if ($request['senha_edt'] != $request['senha_confirmation_edt']) {
                 return redirect()->back()->with('msgErro', 'Senhas não conferem!');
             }
-            User::find($request['id'])->update([
+            $user->update([
                 'password' => Hash::make($request['senha_edt']),
             ]);
         }
@@ -110,7 +124,7 @@ class RegisteredUserController extends Controller
             $updateData['whatsapp'] = $numero;
         }
 
-        User::find($request['id'])->update($updateData);
+        $user->update($updateData);
         return redirect()->back()->with('msg', 'Usuario atualizado com sucesso!');
     }
 

@@ -427,13 +427,28 @@ class AgendaController extends Controller
             $agendamento->consome_credito    = (bool) $credito;
         }
 
+        // Reagendamento (edição com data diferente): a véspera/2h e a confirmação
+        // precisam valer para a NOVA data. Sem isso, o comando diário pula a consulta
+        // (já existe um lembrete 'enviado' + unique agendamento_id/tipo) e o cliente
+        // nunca recebe a véspera da data nova.
+        $dataMudou = $isEdicao && $dataAntiga && !$dataAntiga->equalTo($inicio);
+
         $agendamento->user_id     = $request->user_id;
         $agendamento->servico_id  = $servico->id;
         $agendamento->data_inicio = $inicio;
         $agendamento->data_fim    = $fim;
         $agendamento->especial    = $especial;
         $agendamento->confirmado  = 0;
+        if ($dataMudou) {
+            $agendamento->pre_confirmado_em = null;
+            $agendamento->confirmado_em     = null;
+        }
         $agendamento->save();
+
+        // Remove os lembretes já enviados para que a véspera/2h disparem de novo na data nova.
+        if ($dataMudou) {
+            $agendamento->lembretes()->delete();
+        }
 
         if ($isStaff) {
             $agendamento->load(['user', 'servico']);

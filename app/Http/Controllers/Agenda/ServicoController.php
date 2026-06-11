@@ -11,6 +11,8 @@ class ServicoController extends Controller
 {
     public function store(Request $request)
     {
+        abort_unless(auth()->user()->adm || auth()->user()->func, 403);
+
         $request->validate([
             'descricao'       => ['required', 'string', 'max:255', 'min:5'],
             'duracao_h'       => ['required', 'numeric'],
@@ -46,6 +48,8 @@ class ServicoController extends Controller
 
     public function delete(Request $request)
     {
+        abort_unless(auth()->user()->adm || auth()->user()->func, 403);
+
         $request->validate([
             'excluir-servico-id' => 'required|integer',
         ]);
@@ -58,8 +62,13 @@ class ServicoController extends Controller
             return redirect()->back()->with('msgErro', 'Ainda existem clientes registrados com esse serviço!');
         }
 
+        $servico = ServicosModel::find($request['excluir-servico-id']);
+        if (!$servico) {
+            return redirect()->back()->with('msgErro', 'Serviço não encontrado!');
+        }
+
         try {
-            ServicosModel::find($request['excluir-servico-id'])->update(['excluido' => 1]);
+            $servico->update(['excluido' => 1]);
             return redirect()->back()->with('msg', 'Serviço excluído com sucesso!');
         } catch (\Throwable $th) {
             return redirect()->back()->with('msgErro', 'Erro ao excluir serviço!');
@@ -68,6 +77,8 @@ class ServicoController extends Controller
 
     public function editar(Request $request)
     {
+        abort_unless(auth()->user()->adm || auth()->user()->func, 403);
+
         $request->validate([
             'id_edt_servico'          => 'required|numeric',
             'descricao_edt_servico'   => ['required', 'string', 'max:255', 'min:5'],
@@ -93,7 +104,12 @@ class ServicoController extends Controller
             ])->withInput($request->all());
         }
 
-        ServicosModel::find($request['id_edt_servico'])->update([
+        $servico = ServicosModel::find($request['id_edt_servico']);
+        if (!$servico) {
+            return redirect()->back()->with('msgErro', 'Serviço não encontrado!');
+        }
+
+        $servico->update([
             'descricao'       => $request['descricao_edt_servico'],
             'duracao'         => $request['duracao_h_edt_servico'] . ':' . $request['duracao_m_edt_servico'] . ':00',
             'status'          => $request['status_servico'],

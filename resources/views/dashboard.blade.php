@@ -1141,13 +1141,12 @@
         });
 
         // Ao marcar/desmarcar "Serviço especial": alterna os campos e reinicia o horário.
-        // Ao marcar, pré-seleciona o 1º pacote com saldo no "Descontar de" (caso mais
-        // comum); o funcionário pode trocar para "Não descontar" quando for cortesia.
+        // Ao marcar, deixa o "Descontar de" vazio para obrigar o funcionário a escolher
+        // conscientemente de qual pacote descontar (ou "Não descontar").
         document.getElementById('chk_especial')?.addEventListener('change', function () {
             if (this.checked) {
                 const alvo = document.getElementById('credito_alvo');
-                const primeiro = creditosClienteAtual.find(c => c.restantes > 0);
-                if (alvo && primeiro && !alvo.value) alvo.value = String(primeiro.id);
+                if (alvo) alvo.value = '';
             }
             aplicarModoEspecial();
             resetSelecaoHorario();

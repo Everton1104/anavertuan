@@ -8,6 +8,7 @@ use App\Models\AgendamentoModel;
 use App\Models\Aviso;
 use App\Models\CreditoServico;
 use App\Models\DisponibilidadeModel;
+use App\Models\LembreteConsulta;
 use App\Models\ServicosModel;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -528,6 +529,10 @@ class AgendaController extends Controller
         $phoneId     = env('PHONE_NUMBER_ID');
         $template    = env('WHATSAPP_TEMPLATE_LEMBRETE');
 
+        // Serviço de retirada não pede confirmação: usa o aviso de "pedido pronto".
+        if ($agendamento->servico?->retirada) {
+            return response()->json(['error' => 'Serviço de retirada não usa pedido de confirmação. Use "Avisar que o pedido está pronto".'], 422);
+        }
         if (!$cliente || !$cliente->whatsapp) {
             return response()->json(['error' => 'Cliente sem WhatsApp cadastrado.'], 422);
         }
@@ -556,6 +561,53 @@ class AgendaController extends Controller
             return response()->json(['error' => $resultado['msg'] ?? 'Falha ao enviar lembrete.'], 422);
         }
 
+        // Envio manual substitui a véspera: marca o lembrete '24h' como enviado para o
+        // cron diário não reenviar. O de '2h' continua liberado e será disparado pelo cron.
+        LembreteConsulta::updateOrCreate(
+            ['agendamento_id' => $agendamento->id, 'tipo' => '24h'],
+            ['status' => 'enviado', 'erro_msg' => null],
+        );
+
+        return response()->json(['ok' => true]);
+    }
+
+    // Avisa o cliente que o pedido está pronto para retirada (serviços de retirada).
+    // Disparo manual pelo staff; usa template UTILITY (sem botões de confirmação).
+    public function avisarPedidoPronto($id)
+    {
+        $user = auth()->user();
+        if (!$user->adm && !$user->func) {
+            return response()->json(['error' => 'Não autorizado'], 403);
+        }
+
+        $agendamento = AgendamentoModel::with(['user', 'servico'])->findOrFail($id);
+        $cliente     = $agendamento->user;
+        $phoneId     = env('PHONE_NUMBER_ID');
+        $template    = env('WHATSAPP_TEMPLATE_RETIRADA');
+
+        if (!$agendamento->servico?->retirada) {
+            return response()->json(['error' => 'Este serviço não é de retirada.'], 422);
+        }
+        if (!$cliente || !$cliente->whatsapp) {
+            return response()->json(['error' => 'Cliente sem WhatsApp cadastrado.'], 422);
+        }
+        if (!$phoneId || !$template) {
+            return response()->json(['error' => 'Template de retirada não configurado (WHATSAPP_TEMPLATE_RETIRADA).'], 422);
+        }
+
+        $nome = ucfirst($cliente->name);
+        $data = Carbon::parse($agendamento->data_inicio)->format('d/m/Y');
+
+        // Template (pt_BR): "Olá {{1}}, seu pedido está pronto para ser retirado na data {{2}}. Aguardamos você!"
+        $resultado = WhatsappController::enviarModelo($phoneId, $cliente->whatsapp, $template, [
+            ['type' => 'text', 'text' => $nome],
+            ['type' => 'text', 'text' => $data],
+        ], 'pt_BR');
+
+        if (isset($resultado['erro'])) {
+            return response()->json(['error' => $resultado['msg'] ?? 'Falha ao enviar aviso.'], 422);
+        }
+
         return response()->json(['ok' => true]);
     }
 
@@ -569,6 +621,10 @@ class AgendaController extends Controller
         $agendamento = AgendamentoModel::with(['user', 'servico'])->findOrFail($id);
         $agendamento->confirmado    = 1;
         $agendamento->confirmado_em = now();
+        // Confirmação manual vale como pré-confirmação também (estado consistente).
+        if (!$agendamento->pre_confirmado_em) {
+            $agendamento->pre_confirmado_em = now();
+        }
         $agendamento->save();
 
         $this->notificarWhatsApp($agendamento, false);

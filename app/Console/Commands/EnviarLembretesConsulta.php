@@ -47,6 +47,8 @@ class EnviarLembretesConsulta extends Command
     {
         $agendamentos = AgendamentoModel::with(['user', 'servico'])
             ->whereBetween('data_inicio', [$de, $ate])
+            // Serviços de retirada não pedem confirmação: o aviso é manual ("pedido pronto").
+            ->whereDoesntHave('servico', fn($q) => $q->where('retirada', true))
             ->whereDoesntHave('lembretes', fn($q) => $q->where('tipo', $tipo)->where('status', 'enviado'))
             ->get();
 

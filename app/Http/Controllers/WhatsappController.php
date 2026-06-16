@@ -134,6 +134,12 @@ class WhatsappController extends Controller
 
         $agendamento->confirmado    = true;
         $agendamento->confirmado_em = now();
+        // Confirmar a consulta vale também como pré-confirmação: se o cliente
+        // confirma direto (ex.: pelo "Enviar pedido de confirmação agora", antes
+        // da véspera), considera as duas etapas concluídas.
+        if (!$agendamento->pre_confirmado_em) {
+            $agendamento->pre_confirmado_em = now();
+        }
         $agendamento->save();
 
         // Cliente decidiu confirmar: dispensa qualquer pedido de reagendamento em

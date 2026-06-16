@@ -40,6 +40,8 @@ class ServicoController extends Controller
             'descricao'       => $request->descricao,
             'duracao'         => $request->duracao_h . ':' . $request->duracao_m . ':00',
             'visivel_cliente' => $visivelCliente,
+            'mounjaro'        => $request->boolean('mounjaro'),
+            'retirada'        => $request->boolean('retirada'),
         ]);
 
         return redirect()->back()->with('msg', 'Serviço criado com sucesso!');
@@ -112,6 +114,8 @@ class ServicoController extends Controller
             'duracao'         => $request['duracao_h_edt_servico'] . ':' . $request['duracao_m_edt_servico'] . ':00',
             'status'          => $request['status_servico'],
             'visivel_cliente' => $visivelCliente,
+            'mounjaro'        => $request->boolean('mounjaro_edt_servico'),
+            'retirada'        => $request->boolean('retirada_edt_servico'),
         ]);
 
         return redirect()->back()->with('msg', 'Serviço atualizado com sucesso!');

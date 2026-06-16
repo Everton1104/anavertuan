@@ -19,18 +19,6 @@ class AplicacaoMounjaro extends Model
 
     public function doses()
     {
-        return $this->hasMany(DoseMounjaro::class, 'aplicacao_id')->orderBy('numero_dose');
-    }
-
-    public function getCustoMedicamentoAttribute(): float
-    {
-        return $this->doses->sum(function ($dose) {
-            return $dose->ui * $dose->fornecedor->custo_por_ui;
-        });
-    }
-
-    public function getLucroAttribute(): float
-    {
-        return $this->total_pago - $this->custo_medicamento;
+        return $this->hasMany(DoseMounjaro::class, 'aplicacao_id');
     }
 }

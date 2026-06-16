@@ -72,6 +72,7 @@ Route::middleware('auth')->group(function () {
 Route::resource('agenda', AgendaController::class)->middleware('auth');
 Route::post('agenda/{id}/confirmar', [AgendaController::class, 'confirmar'])->middleware('auth')->name('agenda.confirmar');
 Route::post('agenda/{id}/reenviar-lembrete', [AgendaController::class, 'reenviarLembrete'])->middleware('auth')->name('agenda.reenviar-lembrete');
+Route::post('agenda/{id}/avisar-pedido-pronto', [AgendaController::class, 'avisarPedidoPronto'])->middleware('auth')->name('agenda.avisar-pedido-pronto');
 Route::post('aviso/{id}/dispensar', [AgendaController::class, 'dispensarAviso'])->middleware('auth')->name('aviso.dispensar');
 Route::get('avisos-parcial', [AgendaController::class, 'avisosParcial'])->middleware('auth')->name('avisos.parcial');
 Route::get('agenda-search', [AgendaController::class, 'search'])->middleware('auth')->name('agenda.search');
@@ -154,11 +155,7 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/aplicacoes',                          [AplicacoesController::class, 'index'])->name('aplicacoes.index');
     Route::post('/aplicacoes/fornecedores',            [AplicacoesController::class, 'storeFornecedor'])->name('aplicacoes.fornecedor.store');
     Route::delete('/aplicacoes/fornecedores/{id}',     [AplicacoesController::class, 'destroyFornecedor'])->name('aplicacoes.fornecedor.destroy');
-    Route::post('/aplicacoes/clientes',                [AplicacoesController::class, 'storeAplicacao'])->name('aplicacoes.store');
-    Route::delete('/aplicacoes/clientes/{id}',         [AplicacoesController::class, 'destroyAplicacao'])->name('aplicacoes.destroy');
-    Route::post('/aplicacoes/clientes/{id}/dose',             [AplicacoesController::class, 'storeDose'])->name('aplicacoes.dose.store');
-    Route::delete('/aplicacoes/doses/{id}',                   [AplicacoesController::class, 'destroyDose'])->name('aplicacoes.dose.destroy');
-    Route::get('/api/aplicacoes/agendamentos/{userId}',       [AplicacoesController::class, 'agendamentosCliente'])->name('aplicacoes.agendamentos');
+    Route::post('/aplicacoes/doses/{agendamentoId}',   [AplicacoesController::class, 'salvarDose'])->name('aplicacoes.dose.salvar');
 });
 
 require __DIR__.'/auth.php';

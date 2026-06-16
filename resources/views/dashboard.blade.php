@@ -196,6 +196,14 @@
                 <p class="fs-5 my-2">Duração do Serviço</p>
                 <x-app.select label="Horas" name="duracao_h" required="true" :options="['00'=>'00', '01'=>'01', '02'=>'02']" />
                 <x-app.select label="Minutos" name="duracao_m" required="true" :options="['00'=>'00', '15'=>'15', '30'=>'30', '45'=>'45']" />
+                <div class="form-check mt-3">
+                    <input class="form-check-input" type="checkbox" value="1" name="mounjaro" id="servico_mounjaro">
+                    <label class="form-check-label" for="servico_mounjaro">Serviço de aplicação Mounjaro</label>
+                </div>
+                <div class="form-check mt-2">
+                    <input class="form-check-input" type="checkbox" value="1" name="retirada" id="servico_retirada">
+                    <label class="form-check-label" for="servico_retirada">Serviço de retirada (não pede confirmação)</label>
+                </div>
             </form>
         </x-app.modal>
 
@@ -215,6 +223,14 @@
                         '1' => 'ATIVO'
                     ]"
                 />
+                <div class="form-check mt-3">
+                    <input class="form-check-input" type="checkbox" value="1" name="mounjaro_edt_servico" id="mounjaro_edt_servico">
+                    <label class="form-check-label" for="mounjaro_edt_servico">Serviço de aplicação Mounjaro</label>
+                </div>
+                <div class="form-check mt-2">
+                    <input class="form-check-input" type="checkbox" value="1" name="retirada_edt_servico" id="retirada_edt_servico">
+                    <label class="form-check-label" for="retirada_edt_servico">Serviço de retirada (não pede confirmação)</label>
+                </div>
             </form>
         </x-app.modal>
 
@@ -258,7 +274,10 @@
                                             <svg style="cursor: pointer" onclick="excluirServico({{$servico->id}},'{{$servico->descricao}}')" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#dc3545"><path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z"/></svg>
                                             <svg style="cursor: pointer" onclick="editarServico('{{$servico->id}}')" xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#0d6efd"><path d="M200-200h57l391-391-57-57-391 391v57Zm-80 80v-170l528-527q12-11 26.5-17t30.5-6q16 0 31 6t26 18l55 56q12 11 17.5 26t5.5 30q0 16-5.5 30.5T817-647L290-120H120Zm640-584-56-56 56 56Zm-141 85-28-29 57 57-29-28Z"/></svg>
                                         </td>
-                                        <td>{{ $servico->descricao }}</td>
+                                        <td>{{ $servico->descricao }}
+                                            @if($servico->mounjaro)<span class="badge bg-info text-dark ms-1">Mounjaro</span>@endif
+                                            @if($servico->retirada)<span class="badge bg-secondary ms-1">Retirada</span>@endif
+                                        </td>
                                         <td>{{ $servico->duracao }}</td>
                                         <td class="text-{{ $servico->status == 0 ? 'danger' : 'success' }}">{{ $servico->status == 0 ? 'INATIVO' : 'ATIVO' }}</td>
                                     </tr>
@@ -619,15 +638,21 @@
                                                     </div>
                                                 </div>
                                                 @if($isStaff)
-                                                    @if(!$consulta->confirmado)
+                                                    @if($consulta->servico?->retirada)
+                                                        <button class="btn btn-sm btn-outline-success ms-2"
+                                                                title="Avisar no WhatsApp que o pedido está pronto para retirada"
+                                                                onclick="event.stopPropagation(); avisarPedidoPronto({{ $consulta->id }}, this)">
+                                                            Avisar que o pedido está pronto
+                                                        </button>
+                                                    @elseif(!$consulta->confirmado)
                                                         <button class="btn btn-sm btn-success btn-confirmar ms-2"
                                                                 onclick="event.stopPropagation(); confirmarConsulta({{ $consulta->id }})">
                                                             Confirmar
                                                         </button>
                                                         <button class="btn btn-sm btn-outline-primary btn-reenviar ms-2"
-                                                                title="Reenviar pedido de confirmação no WhatsApp"
+                                                                title="Enviar pedido de confirmação agora no WhatsApp"
                                                                 onclick="event.stopPropagation(); reenviarLembrete({{ $consulta->id }}, this)">
-                                                            Reenviar pedido de confirmação
+                                                            Enviar pedido de confirmação agora
                                                         </button>
                                                     @endif
                                                     <button class="btn btn-sm btn-danger ms-2"
@@ -687,7 +712,7 @@
                 lembrete_24h: @json($c->lembrete_24h),
                 lembrete_2h: @json($c->lembrete_2h),
                 user: { name: @json($c->user->name) },
-                servico: { descricao: @json($c->servico->descricao ?? '') },
+                servico: { descricao: @json($c->servico->descricao ?? ''), retirada: {{ $c->servico?->retirada ? 'true' : 'false' }} },
                 data_inicio: @json($c->data_inicio->format('Y-m-d H:i:s')),
                 data_fim: @json($c->data_fim->format('Y-m-d H:i:s')),
                 mes: @json(\Carbon\Carbon::parse($c->data_inicio)->locale('pt_BR')->translatedFormat('F Y')),
@@ -878,7 +903,7 @@
         }
 
         function reenviarLembrete(id, btn) {
-            const rotulo = 'Reenviar pedido de confirmação';
+            const rotulo = 'Enviar pedido de confirmação agora';
             if (btn) { btn.disabled = true; btn.textContent = 'Enviando...'; }
             axios.post(`/agenda/${id}/reenviar-lembrete`)
                 .then(() => {
@@ -888,6 +913,21 @@
                 .catch((e) => {
                     if (btn) { btn.disabled = false; btn.textContent = rotulo; }
                     alert(e.response?.data?.error ?? 'Erro ao reenviar pedido de confirmação');
+                });
+        }
+
+        // Serviços de retirada: avisa o cliente que o pedido está pronto (sem confirmação).
+        function avisarPedidoPronto(id, btn) {
+            const rotulo = 'Avisar que o pedido está pronto';
+            if (btn) { btn.disabled = true; btn.textContent = 'Enviando...'; }
+            axios.post(`/agenda/${id}/avisar-pedido-pronto`)
+                .then(() => {
+                    if (btn) { btn.textContent = 'Avisado ✓'; }
+                    setTimeout(() => { if (btn) { btn.disabled = false; btn.textContent = rotulo; } }, 2500);
+                })
+                .catch((e) => {
+                    if (btn) { btn.disabled = false; btn.textContent = rotulo; }
+                    alert(e.response?.data?.error ?? 'Erro ao enviar aviso de pedido pronto');
                 });
         }
 
@@ -1306,6 +1346,9 @@
             $('[name="status_servico"]').prop('checked', false);
             $(`#status_servico_${servico.status}`).prop('checked', true);
 
+            $('#mounjaro_edt_servico').prop('checked', !!servico.mounjaro);
+            $('#retirada_edt_servico').prop('checked', !!servico.retirada);
+
             $('#modal-edt-servico').modal('show');
         }
 
@@ -1629,8 +1672,11 @@
                                         </div>
                                     </div>
                                 </div>
-                                ${!c.confirmado ? `<button class="btn btn-sm btn-success btn-confirmar ms-2" onclick="event.stopPropagation(); confirmarConsulta(${c.id})">Confirmar</button>` : ''}
-                                ${!c.confirmado ? `<button class="btn btn-sm btn-outline-primary btn-reenviar ms-2" title="Reenviar pedido de confirmação no WhatsApp" onclick="event.stopPropagation(); reenviarLembrete(${c.id}, this)">Reenviar pedido de confirmação</button>` : ''}
+                                ${c.servico?.retirada
+                                    ? `<button class="btn btn-sm btn-outline-success ms-2" title="Avisar no WhatsApp que o pedido está pronto para retirada" onclick="event.stopPropagation(); avisarPedidoPronto(${c.id}, this)">Avisar que o pedido está pronto</button>`
+                                    : (!c.confirmado
+                                        ? `<button class="btn btn-sm btn-success btn-confirmar ms-2" onclick="event.stopPropagation(); confirmarConsulta(${c.id})">Confirmar</button><button class="btn btn-sm btn-outline-primary btn-reenviar ms-2" title="Reenviar pedido de confirmação no WhatsApp" onclick="event.stopPropagation(); reenviarLembrete(${c.id}, this)">Reenviar pedido de confirmação</button>`
+                                        : '')}
                                 <button class="btn btn-sm btn-danger ms-2"
                                     onclick="event.stopPropagation(); excluirConsultaById(${c.id})">
                                     <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#ffffff"><path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm400-600H280v520h400v-520ZM360-280h80v-360h-80v360Zm160 0h80v-360h-80v360ZM280-720v520-520Z"/></svg>

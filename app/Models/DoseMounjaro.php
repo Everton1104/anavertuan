@@ -8,9 +8,9 @@ class DoseMounjaro extends Model
 {
     protected $table = 'doses_mounjaro';
 
-    protected $fillable = ['aplicacao_id', 'numero_dose', 'ui', 'fornecedor_id', 'data_aplicacao', 'agendamento_id'];
+    protected $fillable = ['aplicacao_id', 'numero_dose', 'ui', 'valor_pago', 'fornecedor_id', 'data_aplicacao', 'agendamento_id'];
 
-    protected $casts = ['data_aplicacao' => 'date'];
+    protected $casts = ['data_aplicacao' => 'date', 'valor_pago' => 'float'];
 
     public function aplicacao()
     {
@@ -22,8 +22,8 @@ class DoseMounjaro extends Model
         return $this->belongsTo(FornecedorMounjaro::class, 'fornecedor_id');
     }
 
-    public function getCustoDoseAttribute(): float
+    public function agendamento()
     {
-        return $this->ui * $this->fornecedor->custo_por_ui;
+        return $this->belongsTo(AgendamentoModel::class, 'agendamento_id');
     }
 }

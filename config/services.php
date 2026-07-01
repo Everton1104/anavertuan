@@ -18,6 +18,16 @@ return [
         'token' => env('POSTMARK_TOKEN'),
     ],
 
+    'mercadopago' => [
+        // PUBLIC_KEY vai para o front (SDK MercadoPago.js); ACCESS_TOKEN é sigiloso
+        // e só deve ser usado no backend. WEBHOOK_SECRET valida a assinatura do
+        // webhook enviado pelo MP (header x-signature).
+        'public_key'         => env('MP_PUBLIC_KEY'),
+        'access_token'       => env('MP_ACCESS_TOKEN'),
+        'webhook_secret'     => env('MP_WEBHOOK_SECRET'),
+        'statement_descriptor' => env('MP_STATEMENT_DESCRIPTOR', config('app.name')),
+    ],
+
     'resend' => [
         'key' => env('RESEND_KEY'),
     ],

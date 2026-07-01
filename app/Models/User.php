@@ -62,6 +62,12 @@ class User extends Authenticatable
         return $this->whatsapp_verified_at !== null;
     }
 
+    // Ordens de pagamento atribuídas a este paciente.
+    public function ordensPagamento()
+    {
+        return $this->hasMany(OrdemPagamento::class, 'user_id');
+    }
+
     public function sendPasswordResetNotification($token)
     {
         $this->notify(new CustomResetPassword($token));

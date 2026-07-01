@@ -7,8 +7,11 @@ use App\Http\Controllers\CreditoServicoController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\WhatsappController;
+use App\Http\Controllers\OrdemPagamentoController;
+use App\Http\Controllers\MercadoPagoWebhookController;
 use App\Models\AgendamentoModel;
 use App\Models\Aviso;
+use App\Models\OrdemPagamento;
 use App\Models\ServicosModel;
 use App\Models\User;
 use Illuminate\Support\Facades\Route;
@@ -50,7 +53,15 @@ Route::get('/dashboard', function () {
         ? Aviso::with(['user', 'servico'])->whereNull('dispensado_at')->latest()->get()
         : collect();
 
-    return view('dashboard', compact('users', 'clientes', 'servicos', 'consultas', 'mesAtual', 'hoje', 'avisos'));
+    // Ordens de pagamento: visíveis SOMENTE para administradores; paciente só as suas.
+    $ordensPagamento = $user->adm
+        ? OrdemPagamento::with(['user', 'criador'])->latest()->limit(50)->get()
+        : collect();
+    $minhasOrdens = (!$user->adm && !$user->func)
+        ? OrdemPagamento::where('user_id', $user->id)->latest()->get()
+        : collect();
+
+    return view('dashboard', compact('users', 'clientes', 'servicos', 'consultas', 'mesAtual', 'hoje', 'avisos', 'ordensPagamento', 'minhasOrdens'));
 })->middleware(['auth', 'verified', 'whatsapp.verified'])->name('dashboard');
 
 Route::get('/api/horarios/{data}', [AgendaController::class, 'horarios']);
@@ -84,6 +95,10 @@ Route::post('editar-servico', [ServicoController::class, 'editar'])->middleware(
 // ── WhatsApp webhook (público) ────────────────────────────────────────────────
 Route::get('/whatsapp/webhook',  [WhatsappController::class, 'verifyToken']);
 Route::post('/whatsapp/webhook', [WhatsappController::class, 'getMsgs']);
+
+// Callback do gateway central (evtu.com.br): cliques de botão roteados a partir
+// do webhook único compartilhado entre sistemas. Assinado com WHATSAPP_GATEWAY_KEY.
+Route::post('/whatsapp/inbound', [WhatsappController::class, 'inbound']);
 
 // ── WhatsApp verificação de número ────────────────────────────────────────────
 Route::middleware('auth')->group(function () {
@@ -157,5 +172,18 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('/aplicacoes/fornecedores/{id}',     [AplicacoesController::class, 'destroyFornecedor'])->name('aplicacoes.fornecedor.destroy');
     Route::post('/aplicacoes/doses/{agendamentoId}',   [AplicacoesController::class, 'salvarDose'])->name('aplicacoes.dose.salvar');
 });
+
+// ── Ordens de pagamento via Mercado Pago (Checkout Transparente) ─────────────
+Route::middleware('auth')->group(function () {
+    // Staff (adm/func) — criar/cancelar/excluir ordens (autorização feita no controller).
+    Route::post('/ordens-pagamento',            [OrdemPagamentoController::class, 'store'])->name('ordens.store');
+    Route::post('/ordens-pagamento/{id}/cancelar', [OrdemPagamentoController::class, 'cancelar'])->name('ordens.cancelar');
+    Route::delete('/ordens-pagamento/{id}',     [OrdemPagamentoController::class, 'destroy'])->name('ordens.destroy');
+    // Paciente — tela de checkout e criação do pagamento.
+    Route::get('/pagamentos/{ordem}/pagar',  [OrdemPagamentoController::class, 'pagar'])->name('pagamentos.pagar');
+    Route::post('/pagamentos/{ordem}/cobrar', [OrdemPagamentoController::class, 'cobrar'])->name('pagamentos.cobrar');
+});
+// Webhook público do MP (fora do CSRF — ver bootstrap/app.php).
+Route::post('/mercadopago/webhook', [MercadoPagoWebhookController::class, 'handle'])->name('mercadopago.webhook');
 
 require __DIR__.'/auth.php';

@@ -366,6 +366,93 @@
             </div>
         </div>
 
+        @if(auth()->user()->adm)
+        {{-- Modal: Nova ordem de pagamento (Mercado Pago) --}}
+        <x-app.modal id="modal-add-ordem" title="Nova ordem de pagamento" :btn="[['lbl' => 'Criar ordem', 'color' => 'primary', 'onclick' => '$(\'#form-add-ordem\').submit()']]">
+            <form method="POST" id="form-add-ordem" action="{{ route('ordens.store') }}" novalidate>
+                @csrf
+                @method('post')
+                <div class="mb-3">
+                    <label for="ordem_user_id" class="form-label">Paciente</label>
+                    <select name="user_id" id="ordem_user_id" class="form-select {{ $errors->has('user_id') ? 'is-invalid' : '' }}" required>
+                        <option value="">Selecione...</option>
+                        @foreach ($clientes as $cliente)
+                            <option value="{{ $cliente->id }}" @selected(old('user_id') == $cliente->id)>{{ $cliente->name }}</option>
+                        @endforeach
+                    </select>
+                    @error('user_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                </div>
+                <x-app.input label="Descrição" type="text" name="descricao" id="ordem_descricao" required="true">
+                    Ex.: Pacote Mounjaro 6 aplicações
+                </x-app.input>
+                <div class="mb-3">
+                    <label for="ordem_valor" class="form-label">Valor (R$)</label>
+                    <input type="number" step="0.01" min="0.01" name="valor" id="ordem_valor"
+                           class="form-control {{ $errors->has('valor') ? 'is-invalid' : '' }}"
+                           value="{{ old('valor') }}" placeholder="3500.00" required>
+                    @error('valor')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                </div>
+                <div class="form-text">O cliente poderá pagar em até <strong>6x sem juros</strong> (ele escolhe o número de parcelas no pagamento). Taxas pagas pelo estabelecimento.</div>
+            </form>
+        </x-app.modal>
+
+        {{-- Ordens de Pagamento (Mercado Pago) --}}
+        <div class="card shadow my-3">
+            <div class="card-header d-flex justify-content-between align-items-center"
+                 data-bs-toggle="collapse" data-bs-target="#collapseOrdens" style="cursor:pointer">
+                <span>Ordens de Pagamento</span>
+                <button class="btn btn-sm btn-outline-light" data-bs-toggle="modal" data-bs-target="#modal-add-ordem" style="background-color: var(--marrom)" onclick="event.stopPropagation();">Nova ordem</button>
+            </div>
+            <div id="collapseOrdens" class="collapse show">
+                <div class="card-body p-3">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Paciente</th>
+                                    <th>Descrição</th>
+                                    <th>Valor</th>
+                                    <th>Parcelas</th>
+                                    <th>Status</th>
+                                    <th>Ação</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @forelse ($ordensPagamento as $ordem)
+                                    @php [$rotulo, $cls] = $ordem->statusBadge(); @endphp
+                                    <tr>
+                                        <td>{{ $ordem->user?->name }}</td>
+                                        <td>{{ $ordem->descricao }}</td>
+                                        <td>R$ {{ number_format($ordem->valor, 2, ',', '.') }}</td>
+                                        <td>@if($ordem->installments) {{ $ordem->installments }}x @else até {{ $ordem->max_parcelas }}x @endif</td>
+                                        <td><span class="badge {{ $cls }}">{{ $rotulo }}</span></td>
+                                        <td>
+                                            @if ($ordem->status === 'aberta')
+                                                <form method="POST" action="{{ route('ordens.cancelar', $ordem->id) }}" class="d-inline" onsubmit="return confirm('Cancelar esta ordem?')">
+                                                    @csrf
+                                                    <button class="btn btn-sm btn-outline-warning">Cancelar</button>
+                                                </form>
+                                            @endif
+                                            @if ($ordem->status !== 'approved')
+                                                <form method="POST" action="{{ route('ordens.destroy', $ordem->id) }}" class="d-inline" onsubmit="return confirm('Excluir DEFINITIVAMENTE esta ordem? Não poderá ser desfeito.')">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button class="btn btn-sm btn-outline-danger">Excluir</button>
+                                                </form>
+                                            @endif
+                                        </td>
+                                    </tr>
+                                @empty
+                                    <tr><td colspan="6" class="text-muted text-center">Nenhuma ordem criada.</td></tr>
+                                @endforelse
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        @endif
+
     @endif
 
     {{-- Agendamentos --}}
@@ -379,6 +466,13 @@
                     @csrf
                     @method('post')
                     <x-app.select label="Cliente" name="user_id" required="true" :options="$clientes->pluck('name', 'id')" />
+                    {{-- Especial (encaixe): pode ser aplicado a qualquer serviço e colocado sobre
+                         outros agendamentos. O serviço (nome+duração) vem do pacote escolhido em
+                         "Descontar de"; no encaixe livre (sem desconto) é escolhido no catálogo. --}}
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="chk_especial">
+                        <label class="form-check-label" for="chk_especial">Especial (encaixe)</label>
+                    </div>
                     {{-- Serviço comum: um item por PACOTE contratado (com saldo restante/total).
                          O select não é enviado; ele alimenta os campos ocultos servico_id e credito_id. --}}
                     <div id="servico-normal-wrap" class="mb-3">
@@ -389,13 +483,6 @@
                         @error('servico_id')
                             <div class="invalid-feedback d-block">{{ $message }}</div>
                         @enderror
-                    </div>
-                    {{-- Especial (encaixe): pode ser aplicado a qualquer serviço e colocado sobre
-                         outros agendamentos. O serviço (nome+duração) vem do pacote escolhido em
-                         "Descontar de"; no encaixe livre (sem desconto) é escolhido no catálogo. --}}
-                    <div class="form-check mb-3">
-                        <input class="form-check-input" type="checkbox" id="chk_especial">
-                        <label class="form-check-label" for="chk_especial">Especial (encaixe)</label>
                     </div>
                     {{-- O checkbox não é enviado no POST; este campo oculto carrega a flag
                          (sincronizado em aplicarModoEspecial). --}}
@@ -496,6 +583,46 @@
                         <div class="modal-footer">
                             <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Entendi</button>
                         </div>
+                    </div>
+                </div>
+            </div>
+        @endif
+
+        @if(!auth()->user()->adm && !auth()->user()->func)
+            {{-- Meus pagamentos (Mercado Pago) --}}
+            <div class="card shadow my-3">
+                <div class="card-header">Meus pagamentos</div>
+                <div class="card-body p-3">
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Descrição</th>
+                                    <th>Valor</th>
+                                    <th>Parcelas</th>
+                                    <th>Status</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @forelse ($minhasOrdens as $ordem)
+                                    @php [$rotulo, $cls] = $ordem->statusBadge(); @endphp
+                                    <tr>
+                                        <td>{{ $ordem->descricao }}</td>
+                                        <td>R$ {{ number_format($ordem->valor, 2, ',', '.') }}</td>
+                                        <td>@if($ordem->max_parcelas > 1) até {{ $ordem->max_parcelas }}x sem juros @else À vista @endif</td>
+                                        <td><span class="badge {{ $cls }}">{{ $rotulo }}</span></td>
+                                        <td>
+                                            @if ($ordem->pagavel())
+                                                <a href="{{ route('pagamentos.pagar', $ordem) }}" class="btn btn-sm" style="background-color: var(--marrom); color:#fff">Pagar</a>
+                                            @endif
+                                        </td>
+                                    </tr>
+                                @empty
+                                    <tr><td colspan="5" class="text-muted text-center">Você não tem pagamentos no momento.</td></tr>
+                                @endforelse
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>

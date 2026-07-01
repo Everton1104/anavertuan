@@ -55,16 +55,7 @@ class WhatsappController extends Controller
             $payload = $msg['button']['payload'] ?? '';
 
             if ($msgType === 'button' && $payload) {
-                if (str_starts_with($payload, 'confirmar_pre_')) {
-                    $agendamentoId = (int) str_replace('confirmar_pre_', '', $payload);
-                    $this->tratarPreConfirmacao($business_phone_number_id, $number, $agendamentoId);
-                } elseif (str_starts_with($payload, 'confirmar_')) {
-                    $agendamentoId = (int) str_replace('confirmar_', '', $payload);
-                    $this->tratarConfirmacao($business_phone_number_id, $number, $agendamentoId);
-                } elseif (str_starts_with($payload, 'reagendar_')) {
-                    $agendamentoId = (int) str_replace('reagendar_', '', $payload);
-                    $this->tratarReagendamento($business_phone_number_id, $number, $agendamentoId);
-                }
+                $this->rotearButtonPayload($business_phone_number_id, (string) $number, $payload);
             }
 
             return response()->json([], 200);
@@ -72,6 +63,72 @@ class WhatsappController extends Controller
             $this->enviarMsg($business_phone_number_id, $number, 'Erro interno. Tente novamente.');
             return response()->json([], 200);
         }
+    }
+
+    // ── Callback do gateway central (evtu.com.br) ─────────────────────────────
+    //
+    // Quando o webhook da Meta aponta para o gateway (mesmo número compartilhado
+    // entre vários sistemas), é ele quem recebe o clique do botão. O gateway
+    // extrai o slug (ex.: "av_"), stripa o prefixo e reenvia aqui o payload puro
+    // ("confirmar_42") assinado com a WHATSAPP_GATEWAY_KEY. Rodamos a MESMA lógica
+    // de tratamento do webhook direto — só mudou o ponto de entrada.
+
+    public function inbound(Request $request)
+    {
+        if (!$this->assinaturaGatewayValida($request)) {
+            \Log::channel('single')->warning('[WA-INBOUND] assinatura X-Gateway-Signature inválida');
+            return response()->json(['error' => 'invalid signature'], 403);
+        }
+
+        $number  = (string) $request->input('from', '');
+        $payload = (string) $request->input('payload', '');
+
+        try {
+            if ($payload) {
+                // phoneId vazio: em modo gateway o envio das respostas de confirmação
+                // passa pelo gateway, que usa o phone_number_id dele (este é ignorado).
+                $this->rotearButtonPayload('', $number, $payload);
+            }
+            return response()->json([], 200);
+        } catch (\Throwable $th) {
+            \Log::channel('single')->error('[WA-INBOUND] erro ao processar callback', ['msg' => $th->getMessage()]);
+            return response()->json([], 200);
+        }
+    }
+
+    // Distribui um payload de botão para o tratamento adequado. Compartilhado
+    // entre o webhook direto da Meta (getMsgs) e o callback do gateway (inbound).
+    private function rotearButtonPayload(string $phoneId, string $number, string $payload): void
+    {
+        if (str_starts_with($payload, 'confirmar_pre_')) {
+            $id = (int) str_replace('confirmar_pre_', '', $payload);
+            $this->tratarPreConfirmacao($phoneId, $number, $id);
+        } elseif (str_starts_with($payload, 'confirmar_')) {
+            $id = (int) str_replace('confirmar_', '', $payload);
+            $this->tratarConfirmacao($phoneId, $number, $id);
+        } elseif (str_starts_with($payload, 'reagendar_')) {
+            $id = (int) str_replace('reagendar_', '', $payload);
+            $this->tratarReagendamento($phoneId, $number, $id);
+        }
+    }
+
+    // Valida a assinatura HMAC do gateway (X-Gateway-Signature) sobre o corpo
+    // bruto com a WHATSAPP_GATEWAY_KEY. Fail-open se a chave não estiver
+    // configurada, para não quebrar ambientes ainda pré-gateway.
+    private function assinaturaGatewayValida(Request $request): bool
+    {
+        $key = env('WHATSAPP_GATEWAY_KEY');
+        if (!$key) {
+            return true;
+        }
+
+        $assinatura = (string) $request->header('X-Gateway-Signature', '');
+        if (!str_starts_with($assinatura, 'sha256=')) {
+            return false;
+        }
+
+        $esperado = 'sha256=' . hash_hmac('sha256', $request->getContent(), $key);
+        return hash_equals($esperado, $assinatura);
     }
 
     // Confirma que o POST veio mesmo da Meta: o corpo bruto é assinado por ela
@@ -103,6 +160,13 @@ class WhatsappController extends Controller
         $agendamento = AgendamentoModel::with('user')->find($agendamentoId);
         if (!$agendamento) return;
 
+        // Botão de um agendamento que já passou: ignora o clique (evita confirmar
+        // consultas antigas via lembrete expirado).
+        if (Carbon::parse($agendamento->data_inicio)->isPast()) {
+            self::enviarMsg($phoneId, $number, 'Este agendamento já passou e não pode mais ser confirmado. Se precisar de um novo horário, fale com a equipe. 😊');
+            return;
+        }
+
         // Mantém o primeiro horário de pré-confirmação; ignora cliques repetidos.
         if (!$agendamento->pre_confirmado_em) {
             $agendamento->pre_confirmado_em = now();
@@ -127,6 +191,13 @@ class WhatsappController extends Controller
     {
         $agendamento = AgendamentoModel::with('user')->find($agendamentoId);
         if (!$agendamento) return;
+
+        // Botão de um agendamento que já passou: ignora o clique (evita confirmar
+        // consultas antigas via lembrete expirado).
+        if (Carbon::parse($agendamento->data_inicio)->isPast()) {
+            self::enviarMsg($phoneId, $number, 'Este agendamento já passou e não pode mais ser confirmado. Se precisar de um novo horário, fale com a equipe. 😊');
+            return;
+        }
 
         // Idempotência: o WhatsApp mantém o botão clicável após o clique. Se já
         // está confirmado, ignora cliques repetidos (não reenvia as mensagens).
@@ -178,6 +249,23 @@ class WhatsappController extends Controller
         $agendamento = AgendamentoModel::with(['user', 'servico'])->find($agendamentoId);
         if (!$agendamento) return;
 
+        // Botão de um agendamento que já passou: ignora o clique.
+        if (Carbon::parse($agendamento->data_inicio)->isPast()) {
+            self::enviarMsg($phoneId, $number, 'Não é possível reagendar um agendamento que já passou. Se precisar de um novo horário, fale com a equipe. 😊');
+            return;
+        }
+
+        // Já existe um novo agendamento futuro: o paciente compareceu a este sem
+        // confirmar (ou já remarcou) — ignora o reagendamento do antigo.
+        $temFuturo = AgendamentoModel::where('user_id', $agendamento->user_id)
+            ->where('id', '!=', $agendamento->id)
+            ->where('data_inicio', '>', now())
+            ->exists();
+        if ($temFuturo) {
+            self::enviarMsg($phoneId, $number, 'Você já tem um novo horário marcado — não é necessário reagendar este. Te esperamos no novo horário! 😊');
+            return;
+        }
+
         // Idempotência: se já há um pedido de reagendamento em aberto para esta
         // consulta, ignora o clique repetido (não duplica o aviso nem re-notifica a admin).
         $jaSolicitado = Aviso::where('tipo', 'reagendamento_solicitado')
@@ -216,8 +304,52 @@ class WhatsappController extends Controller
 
     // ── Envio de mensagens ────────────────────────────────────────────────────
 
+    // Encaminha um envio ao gateway central (evtu.com.br). Retorna o mesmo
+    // formato dos métodos de envio (['msg'=>...] no sucesso, ['erro'=>1,'msg'=>...]
+    // no erro). Acionado quando WA_GATEWAY_ACTIVE está ligado; com a flag desligada
+    // cada método cai no envio direto pela Graph API — rollback instantâneo.
+    private static function enviarViaGateway(string $numero, array $payloadBody): array
+    {
+        $base = rtrim((string) env('WHATSAPP_GATEWAY_URL', ''), '/');
+        if ($base === '') {
+            return ['erro' => 1, 'msg' => 'WHATSAPP_GATEWAY_URL não configurado'];
+        }
+
+        try {
+            $client   = new \GuzzleHttp\Client();
+            $response = $client->request('POST', $base . '/api/whatsapp/send', [
+                'headers' => [
+                    'X-System'     => env('WHATSAPP_SYSTEM_SLUG', 'av'),
+                    'X-Api-Key'    => env('WHATSAPP_GATEWAY_KEY', ''),
+                    'Content-Type' => 'application/json',
+                ],
+                'json'    => array_merge(['to' => $numero], $payloadBody),
+                'timeout' => 15,
+            ]);
+
+            $body = json_decode($response->getBody()->getContents(), true);
+            if (($body['ok'] ?? false) === true) {
+                return ['msg' => 'Enviado via gateway', 'message_id' => $body['message_id'] ?? null];
+            }
+            return ['erro' => 1, 'msg' => $body['error'] ?? 'Erro no gateway'];
+        } catch (\GuzzleHttp\Exception\RequestException $e) {
+            $errBody = $e->hasResponse() ? json_decode($e->getResponse()->getBody(), true) : null;
+            return ['erro' => 1, 'msg' => $errBody['error'] ?? $e->getMessage()];
+        } catch (\Throwable $e) {
+            return ['erro' => 1, 'msg' => $e->getMessage()];
+        }
+    }
+
     public static function enviarMsg($business_phone_number_id, $numero, $msg)
     {
+        if (env('WA_GATEWAY_ACTIVE')) {
+            $r = self::enviarViaGateway($numero, ['tipo' => 'texto', 'texto' => $msg]);
+            if (!isset($r['erro'])) {
+                self::log($numero, Auth::id(), $msg, null, $r['message_id'] ?? null);
+            }
+            return $r;
+        }
+
         try {
             $client   = new \GuzzleHttp\Client();
             $response = $client->request('POST', "https://graph.facebook.com/v25.0/{$business_phone_number_id}/messages", [
@@ -247,6 +379,20 @@ class WhatsappController extends Controller
 
     public static function enviarModelo($business_phone_number_id, $numero, $templateName, $parametros = [], $language = 'pt_BR', $botoes = [])
     {
+        if (env('WA_GATEWAY_ACTIVE')) {
+            $r = self::enviarViaGateway($numero, [
+                'tipo'       => 'template',
+                'template'   => $templateName,
+                'parametros' => $parametros,
+                'language'   => $language,
+                'botoes'     => $botoes,
+            ]);
+            if (!isset($r['erro'])) {
+                self::log($numero, Auth::id(), $templateName, null, $r['message_id'] ?? null);
+            }
+            return $r;
+        }
+
         try {
             $payload = [
                 'messaging_product' => 'whatsapp',
@@ -311,6 +457,34 @@ class WhatsappController extends Controller
         $user->whatsapp_code            = $codigo;
         $user->whatsapp_code_expires_at = now()->addMinutes(10);
         $user->save();
+
+        if (env('WA_GATEWAY_ACTIVE')) {
+            // user_code tem botão de copiar código (sub_type url) — enviamos os
+            // components completos em modo pass-through (sem namespacing de botão,
+            // pois não há reply de botão nesse template).
+            $r = self::enviarViaGateway($user->whatsapp, [
+                'tipo'       => 'template',
+                'template'   => 'user_code',
+                'language'   => 'pt_BR',
+                'components' => [
+                    [
+                        'type'       => 'body',
+                        'parameters' => [['type' => 'text', 'text' => $codigo]],
+                    ],
+                    [
+                        'type'       => 'button',
+                        'sub_type'   => 'url',
+                        'index'      => 0,
+                        'parameters' => [['type' => 'text', 'text' => $codigo]],
+                    ],
+                ],
+            ]);
+            \Illuminate\Support\Facades\Log::info('WhatsApp user_code via gateway', ['para' => $user->whatsapp, 'resp' => $r]);
+            if (!isset($r['erro'])) {
+                self::log($user->whatsapp, $user->id, 'Código de verificação enviado', null, $r['message_id'] ?? null);
+            }
+            return;
+        }
 
         try {
             $client   = new \GuzzleHttp\Client();

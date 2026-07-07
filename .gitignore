@@ -13,6 +13,9 @@
 /.vscode
 /.zed
 /auth.json
+# Claude Code (configs locais de máquina)
+.claude/settings.json
+.claude/settings.local.json
 /node_modules
 /public/build
 /public/hot

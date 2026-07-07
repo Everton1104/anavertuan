@@ -19,6 +19,8 @@ class OrdemPagamento extends Model
         'user_id',
         'criado_por',
         'valor',
+        'taxa_mp',
+        'valor_liquido',
         'descricao',
         'max_parcelas',
         'status',
@@ -31,10 +33,12 @@ class OrdemPagamento extends Model
     ];
 
     protected $casts = [
-        'valor'        => 'float',
-        'max_parcelas' => 'integer',
-        'installments' => 'integer',
-        'pago_em'      => 'datetime',
+        'valor'         => 'float',
+        'taxa_mp'       => 'float',
+        'valor_liquido' => 'float',
+        'max_parcelas'  => 'integer',
+        'installments'  => 'integer',
+        'pago_em'       => 'datetime',
     ];
 
     // Paciente que deve pagar a ordem.
@@ -72,5 +76,24 @@ class OrdemPagamento extends Model
             'refunded'   => ['Estornada', 'bg-dark'],
             default      => [ucfirst($this->status), 'bg-secondary'],
         };
+    }
+
+    // Líquido recebido pelo estabelecimento. Se a ordem foi aprovada e o webhook
+    // registrou o valor_liquido real (congelado no pagamento), usa-o. Senão cai
+    // para a estimativa com a taxa de 6x (pior caso). null quando não há valor.
+    public function valorLiquido(): ?float
+    {
+        if (!is_null($this->valor_liquido)) {
+            return (float) $this->valor_liquido;
+        }
+        $taxa = (float) config('services.mercadopago.taxa_credito_6x', 14.94);
+        return round((float) $this->valor * (1 - $taxa / 100), 2);
+    }
+
+    // True quando o líquido exibido é estimativa (não veio do MP). Usado para
+    // marcar a coluna "Valor recebido" com ~.
+    public function liquidoEstimado(): bool
+    {
+        return is_null($this->valor_liquido);
     }
 }

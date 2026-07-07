@@ -26,6 +26,12 @@ return [
         'access_token'       => env('MP_ACCESS_TOKEN'),
         'webhook_secret'     => env('MP_WEBHOOK_SECRET'),
         'statement_descriptor' => env('MP_STATEMENT_DESCRIPTOR', config('app.name')),
+        // Taxa estimada (em %) de custos do MP no pior caso da ordem — cartão em
+        // 6x sem juros (Parcelado Vendedor: taxa base + % por parcela). Usada SÓ
+        // como estimativa visual na criação da ordem; o valor cobrado do paciente
+        // continua sendo o integral. Ajuste MP_TAXA_CREDITO_6X ao seu plano real.
+        // 14,94 = taxa real confirmada em 26-07 (R$3.500 em 6x → líquido R$2.977).
+        'taxa_credito_6x'    => (float) env('MP_TAXA_CREDITO_6X', 14.94),
     ],
 
     'resend' => [

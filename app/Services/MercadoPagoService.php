@@ -110,13 +110,17 @@ class MercadoPagoService
 
         $data = $resp->json();
         return [
-            'id'                 => (string) ($data['id'] ?? $paymentId),
-            'status'             => (string) ($data['status'] ?? ''),
-            'status_detail'      => (string) ($data['status_detail'] ?? ''),
-            'external_reference' => (string) ($data['external_reference'] ?? ''),
-            'transaction_amount' => isset($data['transaction_amount']) ? (float) $data['transaction_amount'] : null,
-            'payment_method_id'  => (string) ($data['payment_method_id'] ?? ''),
-            'installments'       => (int) ($data['installments'] ?? 0),
+            'id'                  => (string) ($data['id'] ?? $paymentId),
+            'status'              => (string) ($data['status'] ?? ''),
+            'status_detail'       => (string) ($data['status_detail'] ?? ''),
+            'external_reference'  => (string) ($data['external_reference'] ?? ''),
+            'transaction_amount'  => isset($data['transaction_amount']) ? (float) $data['transaction_amount'] : null,
+            'payment_method_id'   => (string) ($data['payment_method_id'] ?? ''),
+            'installments'        => (int) ($data['installments'] ?? 0),
+            // Detalhamento de custos do MP (para calcular o líquido recebido).
+            'fee_details'         => $data['fee_details'] ?? [],
+            'taxes'               => $data['taxes'] ?? [],
+            'net_received_amount' => isset($data['net_received_amount']) ? (float) $data['net_received_amount'] : null,
         ];
     }
 

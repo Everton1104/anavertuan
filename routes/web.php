@@ -8,6 +8,7 @@ use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\WhatsappController;
 use App\Http\Controllers\OrdemPagamentoController;
+use App\Http\Controllers\FichaAnamneseController;
 use App\Http\Controllers\MercadoPagoWebhookController;
 use App\Models\AgendamentoModel;
 use App\Models\Aviso;
@@ -185,5 +186,14 @@ Route::middleware('auth')->group(function () {
 });
 // Webhook público do MP (fora do CSRF — ver bootstrap/app.php).
 Route::post('/mercadopago/webhook', [MercadoPagoWebhookController::class, 'handle'])->name('mercadopago.webhook');
+
+// ── Fichas de anamnese (somente staff — autorização no controller) ────────────
+Route::middleware('auth')->group(function () {
+    Route::get ('/api/clientes/{userId}/anamneses',  [FichaAnamneseController::class, 'indexPorCliente'])->name('anamneses.por-cliente');
+    Route::post('/anamneses',                         [FichaAnamneseController::class, 'store'])->name('anamneses.store');
+    Route::get ('/anamneses/{id}/editar',             [FichaAnamneseController::class, 'edit'])->name('anamneses.edit');
+    Route::post('/anamneses/{id}',                    [FichaAnamneseController::class, 'update'])->name('anamneses.update');
+    Route::post('/anamneses/{id}/excluir',            [FichaAnamneseController::class, 'destroy'])->name('anamneses.destroy');
+});
 
 require __DIR__.'/auth.php';

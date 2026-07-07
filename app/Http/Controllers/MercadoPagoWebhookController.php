@@ -100,8 +100,16 @@ class MercadoPagoWebhookController extends Controller
             if (!empty($res['installments'])) {
                 $ordem->installments = (int) $res['installments'];
             }
-            if ($novoStatus === 'approved' && !$ordem->pago_em) {
-                $ordem->pago_em = now();
+            if ($novoStatus === 'approved') {
+                // Congela taxa/líquido reais do MP no momento do pagamento.
+                $liq = $this->calcularLiquido($res, (float) $ordem->valor);
+                if (!empty($liq)) {
+                    $ordem->taxa_mp       = $liq['taxa_mp'];
+                    $ordem->valor_liquido = $liq['valor_liquido'];
+                }
+                if (!$ordem->pago_em) {
+                    $ordem->pago_em = now();
+                }
             }
             $ordem->save();
 
@@ -183,8 +191,22 @@ class MercadoPagoWebhookController extends Controller
             if ($installments) {
                 $ordem->installments = (int) $installments;
             }
-            if ($novoStatus === 'approved' && !$ordem->pago_em) {
-                $ordem->pago_em = now();
+            if ($novoStatus === 'approved') {
+                // Congela taxa/líquido reais do MP (Orders API) no momento do pagamento.
+                $payData = $data['transactions']['payments'][0] ?? [];
+                $liq = $this->calcularLiquido([
+                    'transaction_amount'  => $amount !== null ? ((float) $amount / 100) : null,
+                    'fee_details'         => $payData['fee_details'] ?? [],
+                    'taxes'               => $payData['taxes'] ?? [],
+                    'net_received_amount' => $payData['net_received_amount'] ?? null,
+                ], (float) $ordem->valor);
+                if (!empty($liq)) {
+                    $ordem->taxa_mp       = $liq['taxa_mp'];
+                    $ordem->valor_liquido = $liq['valor_liquido'];
+                }
+                if (!$ordem->pago_em) {
+                    $ordem->pago_em = now();
+                }
             }
             $ordem->save();
 
@@ -224,6 +246,38 @@ class MercadoPagoWebhookController extends Controller
             'canceled'               => 'cancelled',
             default                  => null,
         };
+    }
+
+    // Calcula taxa total do MP e líquido recebido a partir da resposta do payment.
+    // Prioriza fee_details + taxes (custo total da transação, independe do
+    // calendário de liberação das parcelas); fallback para net_received_amount.
+    // Retorna [] quando não há dados de taxa (a ordem fica sem líquido congelado).
+    private function calcularLiquido(array $res, float $valorEsperado): array
+    {
+        $bruto = isset($res['transaction_amount']) ? (float) $res['transaction_amount'] : $valorEsperado;
+
+        $custo = 0.0;
+        foreach (($res['fee_details'] ?? []) as $f) {
+            if (isset($f['amount'])) {
+                $custo += (float) $f['amount'];
+            }
+        }
+        foreach (($res['taxes'] ?? []) as $t) {
+            if (isset($t['amount'])) {
+                $custo += (float) $t['amount'];
+            }
+        }
+
+        if ($custo > 0) {
+            return ['taxa_mp' => round($custo, 2), 'valor_liquido' => round($bruto - $custo, 2)];
+        }
+
+        if (isset($res['net_received_amount']) && $res['net_received_amount'] !== null) {
+            $liquido = (float) $res['net_received_amount'];
+            return ['taxa_mp' => round($bruto - $liquido, 2), 'valor_liquido' => round($liquido, 2)];
+        }
+
+        return [];
     }
 
     private function confirmarPagamento(OrdemPagamento $ordem): void

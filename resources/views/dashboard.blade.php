@@ -30,6 +30,15 @@
         .consulta-info {
             font-size: 1rem;
         }
+        /* Responsivo: em telas menores (tablet/celular) o card de consulta empilha —
+           informações em cima, botões de ação embaixo, cada um em sua própria linha,
+           ficando legível e fácil de tocar. Em telas grandes continua lado a lado. */
+        .consulta-card { flex-wrap: wrap; }
+        @media (max-width: 991.98px) {
+            .consulta-card { flex-direction: column !important; align-items: stretch !important; }
+            .consulta-card > div:first-child { width: 100%; }
+            .consulta-card > .btn { width: 100%; margin-left: 0 !important; margin-top: 4px; }
+        }
     </style>
 @endsection
 @section("main")
@@ -154,6 +163,7 @@
                                     <th scope="col">WhatsApp</th>
                                     <th scope="col">Administrador</th>
                                     <th scope="col">Colaborador</th>
+                                    <th scope="col">Fichas</th>
                                 </tr>
                             </thead>
                             <tbody id="tbody-usuarios">
@@ -175,6 +185,13 @@
                                         <td>{{ $user->whatsapp ?? '—' }}</td>
                                         <td>{{ $user->adm > 0 ? 'Sim' : 'Não' }}</td>
                                         <td>{{ $user->func > 0 ? 'Sim' : 'Não' }}</td>
+                                        <td>
+                                            @if($user->adm == 0 && $user->func == 0)
+                                                <button class="btn btn-sm btn-outline-primary" onclick="listarAnamneses({{ $user->id }})">Fichas</button>
+                                            @else
+                                                &mdash;
+                                            @endif
+                                        </td>
                                     </tr>
                                 @endforeach
                             </tbody>
@@ -186,6 +203,22 @@
                 </div>
             </div>
         </div>
+
+        {{-- Criação de ficha de anamnese: form oculto, preenchido e submetido por
+             criarAnamneseDe(userId) — disparado pelo botão "Nova ficha" dentro do
+             modal de listagem, que por sua vez abre pelo botão "Fichas" da linha
+             do paciente. Não há mais botão "Criar ficha" fora do card. --}}
+        <form method="POST" id="form-add-anamnese" action="{{ route('anamneses.store') }}" class="d-none" aria-hidden="true">
+            @csrf
+            <input type="hidden" name="user_id" id="anamnese_user_id" value="">
+        </form>
+
+        {{-- Modal: listar fichas de um paciente (visualizar/editar) --}}
+        <x-app.modal id="modal-listar-anamneses" title="Fichas de anamnese">
+            <div id="lista-anamneses">
+                <p class="text-muted mb-0">Carregando...</p>
+            </div>
+        </x-app.modal>
 
         {{-- Modal Adicionar Serviços --}}
         <x-app.modal id="modal-add-servico" title="Adicionar Novo Serviço" :btn="[['lbl' => 'Adicionar', 'color' => 'primary', 'onclick' => '$(\'#form-add-servico\').submit()']]">
@@ -388,9 +421,19 @@
                 <div class="mb-3">
                     <label for="ordem_valor" class="form-label">Valor (R$)</label>
                     <input type="number" step="0.01" min="0.01" name="valor" id="ordem_valor"
+                           data-taxa="{{ config('services.mercadopago.taxa_credito_6x') }}"
                            class="form-control {{ $errors->has('valor') ? 'is-invalid' : '' }}"
                            value="{{ old('valor') }}" placeholder="3500.00" required>
                     @error('valor')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    {{-- Estimativa do valor líquido após taxas do MP (pior caso: 6x sem juros).
+                         Só informativo — o valor cobrado do paciente continua sendo o integral. --}}
+                    <div id="ordem_liquido" class="form-text" style="display:none;">
+                        <span class="text-muted">Taxa MP (6x sem juros, {{ number_format(config('services.mercadopago.taxa_credito_6x'), 2, ',', '.') }}%):</span>
+                        <span id="ordem_liquido_taxa" class="text-danger fw-semibold">-R$ 0,00</span>
+                        <span class="mx-1 text-muted">•</span>
+                        <span class="text-muted">Você recebe:</span>
+                        <span id="ordem_liquido_valor" class="text-success fw-semibold">R$ 0,00</span>
+                    </div>
                 </div>
                 <div class="form-text">O cliente poderá pagar em até <strong>6x sem juros</strong> (ele escolhe o número de parcelas no pagamento). Taxas pagas pelo estabelecimento.</div>
             </form>
@@ -412,6 +455,7 @@
                                     <th>Paciente</th>
                                     <th>Descrição</th>
                                     <th>Valor</th>
+                                    <th>Valor recebido</th>
                                     <th>Parcelas</th>
                                     <th>Status</th>
                                     <th>Ação</th>
@@ -424,6 +468,18 @@
                                         <td>{{ $ordem->user?->name }}</td>
                                         <td>{{ $ordem->descricao }}</td>
                                         <td>R$ {{ number_format($ordem->valor, 2, ',', '.') }}</td>
+                                        <td>
+                                            @if(in_array($ordem->status, ['approved', 'pending', 'aberta']))
+                                                @php $liq = $ordem->valorLiquido(); @endphp
+                                                @if($ordem->liquidoEstimado())
+                                                    <span title="Estimativa (taxa 6x) — o valor real será registrado no pagamento" style="cursor: help">~R$ {{ number_format($liq, 2, ',', '.') }}</span>
+                                                @else
+                                                    R$ {{ number_format($liq, 2, ',', '.') }}
+                                                @endif
+                                            @else
+                                                <span class="text-muted">&mdash;</span>
+                                            @endif
+                                        </td>
                                         <td>@if($ordem->installments) {{ $ordem->installments }}x @else até {{ $ordem->max_parcelas }}x @endif</td>
                                         <td><span class="badge {{ $cls }}">{{ $rotulo }}</span></td>
                                         <td>
@@ -443,7 +499,7 @@
                                         </td>
                                     </tr>
                                 @empty
-                                    <tr><td colspan="6" class="text-muted text-center">Nenhuma ordem criada.</td></tr>
+                                    <tr><td colspan="7" class="text-muted text-center">Nenhuma ordem criada.</td></tr>
                                 @endforelse
                             </tbody>
                         </table>
@@ -1148,6 +1204,65 @@
                 .catch(() => alert('Erro ao remover pacote.'));
         }
 
+        // ── Fichas de anamnese ───────────────────────────────────────────────
+        let anamneseUserIdAtual = null;
+
+        function listarAnamneses(userId) {
+            anamneseUserIdAtual = userId;
+            const box = document.getElementById('lista-anamneses');
+            box.innerHTML = '<p class="text-muted mb-0">Carregando...</p>';
+            new bootstrap.Modal(document.getElementById('modal-listar-anamneses')).show();
+            axios.get(`/api/clientes/${userId}/anamneses`)
+                .then(res => renderListaAnamneses(res.data))
+                .catch(() => { box.innerHTML = '<p class="text-danger mb-0">Falha ao carregar as fichas.</p>'; });
+        }
+
+        function renderListaAnamneses(fichas) {
+            const box = document.getElementById('lista-anamneses');
+            const userId = anamneseUserIdAtual;
+            const btnNova = `<button class="btn btn-outline-light mt-2" style="background-color: var(--marrom)" onclick="criarAnamneseDe(${userId})">Nova ficha</button>`;
+
+            if (!fichas || fichas.length === 0) {
+                box.innerHTML = `<p class="text-muted mb-3">Nenhuma ficha cadastrada.</p>${btnNova}`;
+                return;
+            }
+            box.innerHTML = fichas.map(f => {
+                const imc = f.imc ? ' · IMC ' + String(f.imc).replace('.', ',') : '';
+                const criador = f.criador ? ' · ' + f.criador : '';
+                const preview = f.preview ? `<div class="small text-muted text-truncate" style="max-width:380px">${f.preview}</div>` : '';
+                return `<div class="d-flex justify-content-between align-items-start border rounded p-2 mb-2">
+                    <div class="me-2">
+                        <div class="small fw-semibold">Criada em ${f.criada_em}${criador}${imc}</div>
+                        ${preview}
+                    </div>
+                    <div class="d-flex flex-column gap-1">
+                        <a class="btn btn-sm btn-primary" href="/anamneses/${f.id}/editar">Abrir</a>
+                        <button class="btn btn-sm btn-outline-danger" onclick="excluirAnamnese(${f.id})">Excluir</button>
+                    </div>
+                </div>`;
+            }).join('') + btnNova;
+        }
+
+        // Cria uma ficha nova para o paciente selecionado na lista (submete o form
+        // de criação e deixa o redirect levar à página de preenchimento).
+        function criarAnamneseDe(userId) {
+            const sel = document.getElementById('anamnese_user_id');
+            if (sel) sel.value = String(userId);
+            const inst = bootstrap.Modal.getInstance(document.getElementById('modal-listar-anamneses'));
+            if (inst) inst.hide();
+            setTimeout(() => {
+                const form = document.getElementById('form-add-anamnese');
+                if (form) form.submit();
+            }, 300);
+        }
+
+        function excluirAnamnese(id) {
+            if (!confirm('Excluir esta ficha de anamnese? Não poderá ser desfeito.')) return;
+            axios.post(`/anamneses/${id}/excluir`)
+                .then(() => { if (anamneseUserIdAtual) listarAnamneses(anamneseUserIdAtual); })
+                .catch(() => alert('Erro ao excluir a ficha.'));
+        }
+
         // Pacotes do cliente atualmente carregados (alimentam o select de serviço e o "Descontar de").
         let creditosClienteAtual = [];
 
@@ -1420,6 +1535,9 @@
                     <td>${user.whatsapp ?? '—'}</td>
                     <td>${user.adm > 0 ? 'Sim' : 'Não'}</td>
                     <td>${user.func > 0 ? 'Sim' : 'Não'}</td>
+                    <td>${(user.adm == 0 && user.func == 0)
+                        ? `<button class="btn btn-sm btn-outline-primary" onclick="listarAnamneses(${user.id})">Fichas</button>`
+                        : '&mdash;'}</td>
                 </tr>
             `).join('');
 
@@ -1819,6 +1937,36 @@
                 accordion.innerHTML += html;
             });
         }
+
+        // ── Estimativa de valor líquido (taxa MP, 6x sem juros) no modal de ordem
+        (function () {
+            const input   = document.getElementById('ordem_valor');
+            const box     = document.getElementById('ordem_liquido');
+            const elTaxa  = document.getElementById('ordem_liquido_taxa');
+            const elValor = document.getElementById('ordem_liquido_valor');
+            if (!input || !box) return;
+
+            const taxa = parseFloat(input.dataset.taxa) || 0;
+
+            const fmtBRL = (n) => 'R$ ' + n.toLocaleString('pt-BR', {
+                minimumFractionDigits: 2, maximumFractionDigits: 2,
+            });
+
+            const recalcular = () => {
+                const valor = parseFloat(input.value);
+                if (!valor || valor <= 0 || !taxa) {
+                    box.style.display = 'none';
+                    return;
+                }
+                const desconto = valor * (taxa / 100);
+                elTaxa.textContent  = '-' + fmtBRL(desconto);
+                elValor.textContent = fmtBRL(valor - desconto);
+                box.style.display = 'block';
+            };
+
+            input.addEventListener('input', recalcular);
+            recalcular();
+        })();
     </script>
     @else
     <script>

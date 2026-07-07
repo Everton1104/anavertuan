@@ -68,6 +68,12 @@ class User extends Authenticatable
         return $this->hasMany(OrdemPagamento::class, 'user_id');
     }
 
+    // Fichas de anamnese do paciente (uma por consulta/avaliação).
+    public function fichasAnamnese()
+    {
+        return $this->hasMany(FichaAnamnese::class, 'user_id');
+    }
+
     public function sendPasswordResetNotification($token)
     {
         $this->notify(new CustomResetPassword($token));

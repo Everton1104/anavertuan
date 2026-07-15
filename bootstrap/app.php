@@ -19,6 +19,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'whatsapp/webhook',
             'whatsapp/inbound',
             'mercadopago/webhook',
+            'infinitepay/webhook/*',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

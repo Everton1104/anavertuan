@@ -4,16 +4,21 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-// Ordem de pagamento criada pelo staff e quitável pelo paciente via Mercado Pago.
-// O status segue os estados do pagamento no MP (approved, pending, rejected...)
-// mais os internos "aberta" (aguardando o paciente pagar) e "cancelled".
+// Ordem de pagamento criada pelo staff e quitável pelo paciente. Hoje via
+// InfinitePay (Link de Pagamento / redirect); ordens antigas via Mercado Pago
+// (transparente) permanecem com gateway='mercadopago'. O status segue os
+// estados do pagamento (approved, pending, rejected...) mais os internos
+// "aberta" (aguardando o paciente pagar) e "cancelled".
 class OrdemPagamento extends Model
 {
     protected $table = 'ordem_pagamentos';
 
-    // Teto fixo de parcelas sem juros oferecidas a TODOS os clientes. O número
-    // exato de parcelas é escolhido por eles no momento do pagamento (1 a 6x).
-    public const MAX_PARCELAS = 6;
+    // Teto de parcelas oferecidas (o cliente escolhe 1 a 12x no checkout).
+    public const MAX_PARCELAS = 12;
+
+    // Parcelas sem juros (taxa paga pelo estabelecimento); da 7ª à 12ª o juros
+    // é pago pelo cliente. A regra efetiva é configurada na conta InfinitePay.
+    public const MAX_SEM_JUROS = 6;
 
     protected $fillable = [
         'user_id',
@@ -25,6 +30,9 @@ class OrdemPagamento extends Model
         'max_parcelas',
         'status',
         'external_reference',
+        'infinitepay_slug',
+        'infinitepay_url',
+        'gateway',
         'payment_id_mp',
         'payment_method_id',
         'installments',
@@ -78,15 +86,19 @@ class OrdemPagamento extends Model
         };
     }
 
-    // Líquido recebido pelo estabelecimento. Se a ordem foi aprovada e o webhook
-    // registrou o valor_liquido real (congelado no pagamento), usa-o. Senão cai
-    // para a estimativa com a taxa de 6x (pior caso). null quando não há valor.
+    // Líquido recebido pelo estabelecimento. Se o webhook registrou o
+    // valor_liquido real (congelado no pagamento — só acontece para ordens
+    // antigas do MP), usa-o. Senão cai para a estimativa com a taxa do gateway
+    // da própria ordem (MP pior caso 6x, ou InfinitePay). A estimativa do
+    // InfinitePay é marcada com ~ no dashboard (a API não devolve o líquido real).
     public function valorLiquido(): ?float
     {
         if (!is_null($this->valor_liquido)) {
             return (float) $this->valor_liquido;
         }
-        $taxa = (float) config('services.mercadopago.taxa_credito_6x', 14.94);
+        $taxa = $this->gateway === 'infinitepay'
+            ? (float) config('services.infinitepay.taxa_credito', 4.99)
+            : (float) config('services.mercadopago.taxa_credito_6x', 14.94);
         return round((float) $this->valor * (1 - $taxa / 100), 2);
     }
 

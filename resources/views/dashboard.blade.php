@@ -421,21 +421,22 @@
                 <div class="mb-3">
                     <label for="ordem_valor" class="form-label">Valor (R$)</label>
                     <input type="number" step="0.01" min="0.01" name="valor" id="ordem_valor"
-                           data-taxa="{{ config('services.mercadopago.taxa_credito_6x') }}"
+                           data-taxa="{{ config('services.infinitepay.taxa_credito') }}"
                            class="form-control {{ $errors->has('valor') ? 'is-invalid' : '' }}"
                            value="{{ old('valor') }}" placeholder="3500.00" required>
                     @error('valor')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                    {{-- Estimativa do valor líquido após taxas do MP (pior caso: 6x sem juros).
-                         Só informativo — o valor cobrado do paciente continua sendo o integral. --}}
+                    {{-- Estimativa do valor líquido após taxas da InfinitePay. Só informativo
+                         — a API de Link não devolve o líquido real; o valor cobrado do paciente
+                         é o integral. Taxa de exemplo — ajuste INFINITEPAY_TAXA_CREDITO ao real. --}}
                     <div id="ordem_liquido" class="form-text" style="display:none;">
-                        <span class="text-muted">Taxa MP (6x sem juros, {{ number_format(config('services.mercadopago.taxa_credito_6x'), 2, ',', '.') }}%):</span>
+                        <span class="text-muted">Taxa InfinitePay (~{{ number_format(config('services.infinitepay.taxa_credito'), 2, ',', '.') }}%):</span>
                         <span id="ordem_liquido_taxa" class="text-danger fw-semibold">-R$ 0,00</span>
                         <span class="mx-1 text-muted">•</span>
                         <span class="text-muted">Você recebe:</span>
                         <span id="ordem_liquido_valor" class="text-success fw-semibold">R$ 0,00</span>
                     </div>
                 </div>
-                <div class="form-text">O cliente poderá pagar em até <strong>6x sem juros</strong> (ele escolhe o número de parcelas no pagamento). Taxas pagas pelo estabelecimento.</div>
+                <div class="form-text">O cliente poderá pagar em até <strong>12x</strong>, sendo <strong>6x sem juros</strong> (taxa paga pelo estabelecimento). Da 7ª à 12ª parcela o juros é pago pelo cliente.</div>
             </form>
         </x-app.modal>
 
@@ -666,7 +667,7 @@
                                     <tr>
                                         <td>{{ $ordem->descricao }}</td>
                                         <td>R$ {{ number_format($ordem->valor, 2, ',', '.') }}</td>
-                                        <td>@if($ordem->max_parcelas > 1) até {{ $ordem->max_parcelas }}x sem juros @else À vista @endif</td>
+                                        <td>@if($ordem->max_parcelas > 1) até {{ $ordem->max_parcelas }}x ({{ min((int) $ordem->max_parcelas, \App\Models\OrdemPagamento::MAX_SEM_JUROS) }}x sem juros) @else À vista @endif</td>
                                         <td><span class="badge {{ $cls }}">{{ $rotulo }}</span></td>
                                         <td>
                                             @if ($ordem->pagavel())
@@ -1938,7 +1939,7 @@
             });
         }
 
-        // ── Estimativa de valor líquido (taxa MP, 6x sem juros) no modal de ordem
+        // ── Estimativa de valor líquido (taxa InfinitePay) no modal de ordem
         (function () {
             const input   = document.getElementById('ordem_valor');
             const box     = document.getElementById('ordem_liquido');

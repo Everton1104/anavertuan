@@ -1,6 +1,8 @@
 *.log
 .DS_Store
 .env
+.env.old
+.env.local
 .env.online
 .env.backup
 .env.production

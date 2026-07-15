@@ -23,3 +23,10 @@ Schedule::command('lembretes:enviar 2h')
     ->everyFifteenMinutes()
     ->withoutOverlapping()
     ->runInBackground();
+
+// Reconciliação InfinitePay: backstop para webhook perdido. A cada 5 min consulta
+// (payment_check) as ordens pagáveis com link gerado e aplica o status real.
+Schedule::command('infinitepay:reconciliar')
+    ->everyFiveMinutes()
+    ->withoutOverlapping()
+    ->runInBackground();

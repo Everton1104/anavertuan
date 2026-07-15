@@ -9,6 +9,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\WhatsappController;
 use App\Http\Controllers\OrdemPagamentoController;
 use App\Http\Controllers\FichaAnamneseController;
+use App\Http\Controllers\InfinitePayWebhookController;
 use App\Http\Controllers\MercadoPagoWebhookController;
 use App\Models\AgendamentoModel;
 use App\Models\Aviso;
@@ -174,17 +175,27 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/aplicacoes/doses/{agendamentoId}',   [AplicacoesController::class, 'salvarDose'])->name('aplicacoes.dose.salvar');
 });
 
-// ── Ordens de pagamento via Mercado Pago (Checkout Transparente) ─────────────
+// ── Ordens de pagamento (InfinitePay — Link de Pagamento / redirect) ─────────
 Route::middleware('auth')->group(function () {
-    // Staff (adm/func) — criar/cancelar/excluir ordens (autorização feita no controller).
-    Route::post('/ordens-pagamento',            [OrdemPagamentoController::class, 'store'])->name('ordens.store');
+    // Staff (adm/func) — criar/cancelar/excluir ordens (autorização no controller).
+    Route::post('/ordens-pagamento',               [OrdemPagamentoController::class, 'store'])->name('ordens.store');
     Route::post('/ordens-pagamento/{id}/cancelar', [OrdemPagamentoController::class, 'cancelar'])->name('ordens.cancelar');
-    Route::delete('/ordens-pagamento/{id}',     [OrdemPagamentoController::class, 'destroy'])->name('ordens.destroy');
-    // Paciente — tela de checkout e criação do pagamento.
-    Route::get('/pagamentos/{ordem}/pagar',  [OrdemPagamentoController::class, 'pagar'])->name('pagamentos.pagar');
-    Route::post('/pagamentos/{ordem}/cobrar', [OrdemPagamentoController::class, 'cobrar'])->name('pagamentos.cobrar');
+    Route::delete('/ordens-pagamento/{id}',        [OrdemPagamentoController::class, 'destroy'])->name('ordens.destroy');
+    // Paciente — tela de checkout (GET) e criação do link de pagamento (POST, throttle).
+    Route::get ('/pagamentos/{ordem}/pagar', [OrdemPagamentoController::class, 'pagar'])->name('pagamentos.pagar');
+    Route::post('/pagamentos/{ordem}/link',  [OrdemPagamentoController::class, 'link'])->middleware('throttle:30,1')->name('pagamentos.link');
 });
-// Webhook público do MP (fora do CSRF — ver bootstrap/app.php).
+
+// Retorno do checkout e polling de status (sem auth) — validados pelo `ref`
+// (external_reference) no controller. Sobrevivem à expiração de sessão e aos
+// query params extras que a InfinitePay adiciona ao redirecionar.
+Route::get('/pagamentos/{ordem}/retorno', [OrdemPagamentoController::class, 'retorno'])->name('pagamentos.retorno');
+Route::get('/pagamentos/{ordem}/status',  [OrdemPagamentoController::class, 'status'])->name('pagamentos.status');
+
+// Webhook público da InfinitePay (token no path; fora do CSRF — ver bootstrap/app.php).
+Route::post('/infinitepay/webhook/{token}', [InfinitePayWebhookController::class, 'handle'])->name('infinitepay.webhook');
+
+// Webhook público do MP (mantido inerte — ordens antigas ainda podem notificar).
 Route::post('/mercadopago/webhook', [MercadoPagoWebhookController::class, 'handle'])->name('mercadopago.webhook');
 
 // ── Fichas de anamnese (somente staff — autorização no controller) ────────────

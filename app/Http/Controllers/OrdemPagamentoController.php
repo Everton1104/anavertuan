@@ -3,16 +3,16 @@
 namespace App\Http\Controllers;
 
 use App\Models\OrdemPagamento;
-use App\Services\MercadoPagoService;
+use App\Services\InfinitePayService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 // Ordens de pagamento: o staff (adm/func) cria/cancela; o paciente paga via
-// Checkout Transparente (Mercado Pago). Valor e parcelas são sempre lidos do
-// banco no momento do pagamento — nunca do front.
+// InfinitePay (Link de Pagamento / redirect). Valor e parcelas são definidos na
+// ordem (banco) e no link gerado — nunca no front.
 class OrdemPagamentoController extends Controller
 {
-    public function __construct(private readonly MercadoPagoService $mp) {}
+    public function __construct(private readonly InfinitePayService $ip) {}
 
     // ── Staff: criar ordem ───────────────────────────────────────────────────
     public function store(Request $request)
@@ -99,21 +99,20 @@ class OrdemPagamentoController extends Controller
         return redirect()->back()->with('msg', 'Ordem excluída.');
     }
 
-    // ── Paciente: tela de checkout (cartão) ─────────────────────────────────
+    // ── Paciente: tela de checkout (resumo + botão para o link InfinitePay) ──
     public function pagar(OrdemPagamento $ordem)
     {
         abort_unless($ordem->user_id === auth()->id(), 403, 'Ordem não encontrada.');
         abort_if($ordem->status === 'approved', 403, 'Esta ordem já foi paga.');
         abort_if($ordem->status === 'cancelled', 403, 'Esta ordem foi cancelada.');
 
-        return view('pagamentos.pagar', [
-            'ordem'      => $ordem,
-            'publicKey'  => config('services.mercadopago.public_key'),
-        ]);
+        // GET puro: só renderiza o resumo. O link de pagamento é criado no POST
+        // /link (abaixo) — side-effect fora do GET, com throttle e lock.
+        return view('pagamentos.pagar', ['ordem' => $ordem]);
     }
 
-    // ── Paciente: criar o pagamento no MP (chamado pelo onSubmit do Brick) ──
-    public function cobrar(Request $request, OrdemPagamento $ordem)
+    // ── Paciente: criar o link de pagamento InfinitePay (chamado pelo botão) ─
+    public function link(Request $request, OrdemPagamento $ordem)
     {
         abort_unless($ordem->user_id === auth()->id(), 403);
 
@@ -124,57 +123,82 @@ class OrdemPagamentoController extends Controller
             return response()->json(['erro' => 1, 'msg' => 'Esta ordem foi cancelada.'], 422);
         }
 
-        $dados = $request->validate([
-            'token'             => ['required', 'string'],
-            'payment_method_id' => ['required', 'string'],
-            'issuer_id'         => ['nullable', 'string'],
-            'installments'      => ['required', 'integer', 'min:1'],
-            'payer_email'       => ['nullable', 'email'],
-            'payer_doc_type'    => ['nullable', 'string'],
-            'payer_doc_number'  => ['nullable', 'string'],
-        ]);
+        // Uma ordem = um link. Reusamos o link existente (lock evita race de duas
+        // abas criando links distintos). O link da InfinitePay só é pagável UMA
+        // vez — então o paciente que clicar de novo cai no MESMO link (já pago/
+        // utilizado), o que previne pagamento em duplicidade.
+        $reuso = DB::transaction(function () use ($ordem) {
+            $locked = OrdemPagamento::where('id', $ordem->id)->lockForUpdate()->first();
+            if (!$locked) {
+                return null;
+            }
 
-        $res = $this->mp->criarPayment($ordem, $dados);
-        if (isset($res['erro'])) {
-            return response()->json($res, 422);
+            // Já temos um link válido pra esta ordem → reusa.
+            if ($locked->infinitepay_url) {
+                return ['url' => $locked->infinitepay_url];
+            }
+
+            $res = $this->ip->criarLink($locked);
+            if (isset($res['erro'])) {
+                return ['erro' => $res];
+            }
+            $locked->infinitepay_url = $res['url'];
+            if (!empty($res['slug'])) {
+                $locked->infinitepay_slug = $res['slug'];
+            }
+            $locked->gateway = 'infinitepay';
+            $locked->save();
+
+            return ['url' => $res['url']];
+        });
+
+        if ($reuso === null) {
+            return response()->json(['erro' => 1, 'msg' => 'Ordem não encontrada.'], 422);
+        }
+        if (isset($reuso['erro'])) {
+            return response()->json($reuso['erro'], 422);
         }
 
-        $status = $res['status'] ?? 'pending';
-        $ordem->status            = $status;
-        $ordem->status_detail     = $res['status_detail'] ?? null;
-        $ordem->payment_id_mp     = $res['id'] ?? ($ordem->payment_id_mp);
-        $ordem->payment_method_id = $dados['payment_method_id'];
-        $ordem->installments      = (int) $dados['installments'];
-        if ($status === 'approved') {
-            $ordem->pago_em = now();
-        }
-        $ordem->save();
-
-        $ordem->eventos()->create([
-            'payment_id_mp' => $ordem->payment_id_mp,
-            'status'        => $status,
-            'origem'        => 'checkout',
-            'payload'       => ['status_detail' => $res['status_detail'] ?? null],
-        ]);
-
-        if ($status === 'approved') {
-            $this->confirmarPagamentoPaciente($ordem);
-        }
-
-        return response()->json(['status' => $status, 'message' => $this->mensagemStatus($status)]);
+        return response()->json(['url' => $reuso['url']]);
     }
 
-    // ── Helpers ──────────────────────────────────────────────────────────────
-
-    private function mensagemStatus(string $status): string
+    // ── Paciente: tela de retorno após pagar no checkout InfinitePay (signed) ─
+    // Rota assinada (sem auth) — sobrevive à expiração de sessão durante o
+    // checkout off-site. A integridade do status é garantida pelo webhook; esta
+    // tela é só exibição + polling.
+    public function retorno(OrdemPagamento $ordem)
     {
-        return match ($status) {
-            'approved'  => 'Pagamento aprovado! 🎉',
-            'pending'   => 'Pagamento em análise. Avisaremos quando for confirmado.',
-            'in_process'=> 'Pagamento em processamento. Aguarde.',
-            'rejected'  => 'Pagamento recusado. Verifique os dados do cartão e tente novamente.',
-            default     => 'Status: ' . $status,
-        };
+        // Validação pelo `ref` (external_reference, UUID secreto) — tolera os query
+        // params extras que a InfinitePay adiciona ao redirecionar, e não depende de
+        // sessão (que pode expirar durante o checkout off-site).
+        if ((string) request()->query('ref', '') !== (string) $ordem->external_reference) {
+            abort(403);
+        }
+
+        return view('pagamentos.retorno', [
+            'ordem'     => $ordem,
+            'statusUrl' => route('pagamentos.status', ['ordem' => $ordem->id]) . '?ref=' . urlencode((string) $ordem->external_reference),
+        ]);
+    }
+
+    // ── Paciente: status do pagamento para o polling da tela de retorno.
+    // Confirma de forma autoritativa via payment_check (backstop caso o webhook
+    // ainda não tenha chegado) e devolve o status atual.
+    public function status(OrdemPagamento $ordem)
+    {
+        if ((string) request()->query('ref', '') !== (string) $ordem->external_reference) {
+            abort(403);
+        }
+
+        if ($ordem->status !== 'approved') {
+            app(InfinitePayWebhookController::class)->sincronizarOrdem($ordem);
+            $ordem->refresh();
+        }
+
+        return response()->json([
+            'status' => $ordem->status,
+            'paid'   => $ordem->status === 'approved',
+        ]);
     }
 
     // Avisa o paciente (por WhatsApp, se tiver número) que uma ordem foi criada.
@@ -187,7 +211,10 @@ class OrdemPagamentoController extends Controller
         }
 
         $valor    = 'R$ ' . number_format((float) $ordem->valor, 2, ',', '.');
-        $parcelas = (string) $ordem->max_parcelas;
+        // O template diz "...{{parcelas}}x sem juros..." — enviamos o nº de parcelas
+        // SEM juros (6), não o teto total (12). O paciente ainda pode parcelar até
+        // 12x (vê no checkout; da 7ª à 12ª há juros do cliente).
+        $parcelas = (string) min((int) $ordem->max_parcelas, OrdemPagamento::MAX_SEM_JUROS);
         $link     = rtrim((string) env('APP_URL', config('app.url')), '/') . '/pagamentos/' . $ordem->id . '/pagar';
         $nome     = ucfirst($paciente->name);
 

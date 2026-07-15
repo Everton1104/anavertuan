@@ -34,6 +34,17 @@ return [
         'taxa_credito_6x'    => (float) env('MP_TAXA_CREDITO_6X', 14.94),
     ],
 
+    // InfinitePay — Link de Pagamento (redirect). API pública (api.checkout.infinitepay.io),
+    // sem credenciais: o lojista é identificado apenas pelo HANDLE (InfiniteTag sem o '$').
+    // WEBHOOK_TOKEN é um segredo nosso embutido no PATH do webhook_url (server-to-server,
+    // nunca exposto ao browser) e validado no controller — a API de Link NÃO assina o webhook.
+    // TAXA_CREDITO é placeholder de estimativa (a API não devolve o líquido real do lojista).
+    'infinitepay' => [
+        'handle'        => env('INFINITEPAY_HANDLE'),
+        'webhook_token' => env('INFINITEPAY_WEBHOOK_TOKEN'),
+        'taxa_credito'  => (float) env('INFINITEPAY_TAXA_CREDITO', 4.99),
+    ],
+
     'resend' => [
         'key' => env('RESEND_KEY'),
     ],

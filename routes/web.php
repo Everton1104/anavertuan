@@ -198,12 +198,19 @@ Route::post('/infinitepay/webhook/{token}', [InfinitePayWebhookController::class
 // Webhook público do MP (mantido inerte — ordens antigas ainda podem notificar).
 Route::post('/mercadopago/webhook', [MercadoPagoWebhookController::class, 'handle'])->name('mercadopago.webhook');
 
-// ── Fichas de anamnese (somente staff — autorização no controller) ────────────
+// ── Fichas do paciente: anamnese e nota livre (somente staff) ────────────────
 Route::middleware('auth')->group(function () {
     Route::get ('/api/clientes/{userId}/anamneses',  [FichaAnamneseController::class, 'indexPorCliente'])->name('anamneses.por-cliente');
     Route::post('/anamneses',                         [FichaAnamneseController::class, 'store'])->name('anamneses.store');
     Route::get ('/anamneses/{id}/editar',             [FichaAnamneseController::class, 'edit'])->name('anamneses.edit');
     Route::post('/anamneses/{id}',                    [FichaAnamneseController::class, 'update'])->name('anamneses.update');
+    // Nota livre (título + observação + anexos).
+    Route::get ('/anamneses/{id}/nota',               [FichaAnamneseController::class, 'editNota'])->name('anamneses.nota.edit');
+    Route::post('/anamneses/{id}/nota',               [FichaAnamneseController::class, 'updateNota'])->name('anamneses.nota.update');
+    // Anexos da nota.
+    Route::post('/anamneses/{id}/anexos',             [FichaAnamneseController::class, 'storeAnexo'])->name('anamneses.anexo.store');
+    Route::post('/anamneses/{id}/anexos/{anexo}/excluir', [FichaAnamneseController::class, 'destroyAnexo'])->name('anamneses.anexo.destroy');
+    // Soft delete (serve para anamnese e nota).
     Route::post('/anamneses/{id}/excluir',            [FichaAnamneseController::class, 'destroy'])->name('anamneses.destroy');
 });
 

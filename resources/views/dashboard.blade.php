@@ -204,13 +204,14 @@
             </div>
         </div>
 
-        {{-- Criação de ficha de anamnese: form oculto, preenchido e submetido por
-             criarAnamneseDe(userId) — disparado pelo botão "Nova ficha" dentro do
-             modal de listagem, que por sua vez abre pelo botão "Fichas" da linha
-             do paciente. Não há mais botão "Criar ficha" fora do card. --}}
+        {{-- Criação de ficha: form oculto, preenchido e submetido por
+             criarAnamneseDe(userId, tipo) — disparado pelos botões "Nova anamnese"
+             e "Nova anotação" dentro do modal de listagem, que por sua vez abre
+             pelo botão "Fichas" da linha do paciente. --}}
         <form method="POST" id="form-add-anamnese" action="{{ route('anamneses.store') }}" class="d-none" aria-hidden="true">
             @csrf
             <input type="hidden" name="user_id" id="anamnese_user_id" value="">
+            <input type="hidden" name="tipo" id="anamnese_tipo" value="">
         </form>
 
         {{-- Modal: listar fichas de um paciente (visualizar/editar) --}}
@@ -1221,34 +1222,51 @@
         function renderListaAnamneses(fichas) {
             const box = document.getElementById('lista-anamneses');
             const userId = anamneseUserIdAtual;
-            const btnNova = `<button class="btn btn-outline-light mt-2" style="background-color: var(--marrom)" onclick="criarAnamneseDe(${userId})">Nova ficha</button>`;
+            // Dois botões de criação: anamnese (formulário) e anotação livre.
+            const btnsCriar =
+                `<div class="d-flex flex-wrap gap-2 mt-2">
+                    <button class="btn btn-outline-light" style="background-color: var(--marrom)" onclick="criarAnamneseDe(${userId}, 'anamnese')">Nova anamnese</button>
+                    <button class="btn btn-outline-dark" onclick="criarAnamneseDe(${userId}, 'nota')">Nova anotação</button>
+                </div>`;
 
             if (!fichas || fichas.length === 0) {
-                box.innerHTML = `<p class="text-muted mb-3">Nenhuma ficha cadastrada.</p>${btnNova}`;
+                box.innerHTML = `<p class="text-muted mb-3">Nenhuma ficha cadastrada.</p>${btnsCriar}`;
                 return;
             }
             box.innerHTML = fichas.map(f => {
-                const imc = f.imc ? ' · IMC ' + String(f.imc).replace('.', ',') : '';
+                const ehNota = f.tipo === 'nota';
+                const badge = ehNota
+                    ? '<span class="badge" style="background-color: var(--marrom)">Anotação</span>'
+                    : '<span class="badge bg-secondary">Anamnese</span>';
+                const imc = (!ehNota && f.imc) ? ' · IMC ' + String(f.imc).replace('.', ',') : '';
+                const anexos = f.qtd_anexos ? ' · 📎 ' + f.qtd_anexos : '';
                 const criador = f.criador ? ' · ' + f.criador : '';
+                const tituloNota = (ehNota && f.titulo)
+                    ? `<div class="small fw-semibold">${f.titulo}</div>` : '';
                 const preview = f.preview ? `<div class="small text-muted text-truncate" style="max-width:380px">${f.preview}</div>` : '';
+                const hrefAbrir = ehNota ? `/anamneses/${f.id}/nota` : `/anamneses/${f.id}/editar`;
                 return `<div class="d-flex justify-content-between align-items-start border rounded p-2 mb-2">
                     <div class="me-2">
-                        <div class="small fw-semibold">Criada em ${f.criada_em}${criador}${imc}</div>
+                        <div class="small fw-semibold">${badge} ${f.criada_em}${criador}${imc}${anexos}</div>
+                        ${tituloNota}
                         ${preview}
                     </div>
                     <div class="d-flex flex-column gap-1">
-                        <a class="btn btn-sm btn-primary" href="/anamneses/${f.id}/editar">Abrir</a>
+                        <a class="btn btn-sm btn-primary" href="${hrefAbrir}">Abrir</a>
                         <button class="btn btn-sm btn-outline-danger" onclick="excluirAnamnese(${f.id})">Excluir</button>
                     </div>
                 </div>`;
-            }).join('') + btnNova;
+            }).join('') + btnsCriar;
         }
 
-        // Cria uma ficha nova para o paciente selecionado na lista (submete o form
-        // de criação e deixa o redirect levar à página de preenchimento).
-        function criarAnamneseDe(userId) {
-            const sel = document.getElementById('anamnese_user_id');
-            if (sel) sel.value = String(userId);
+        // Cria uma ficha nova (anamnese ou nota) para o paciente selecionado na
+        // lista: submete o form de criação e deixa o redirect levar à página de
+        // preenchimento correta conforme o tipo.
+        function criarAnamneseDe(userId, tipo) {
+            const selUser = document.getElementById('anamnese_user_id');
+            const selTipo = document.getElementById('anamnese_tipo');
+            if (selUser) selUser.value = String(userId);
+            if (selTipo) selTipo.value = tipo || 'anamnese';
             const inst = bootstrap.Modal.getInstance(document.getElementById('modal-listar-anamneses'));
             if (inst) inst.hide();
             setTimeout(() => {

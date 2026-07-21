@@ -3,13 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Models\FichaAnamnese;
+use App\Models\FichaAnexo;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
-// Fichas de anamnese: acesso exclusivo de staff (adm/func). O staff cria a ficha
-// (escolhendo o paciente), preenche durante a consulta numa página dedicada, e
-// pode reabrir para visualizar/editar. Um paciente pode ter várias fichas.
-// Exclusão é lógica via flag `excluido`.
+// Fichas do paciente (anamnese e anotação livre): acesso exclusivo de staff
+// (adm/func). O staff cria a ficha (escolhendo o paciente), preenche durante a
+// consulta numa página dedicada, e pode reabrir para visualizar/editar. Um
+// paciente pode ter várias fichas. Exclusão é lógica via flag `excluido`.
 class FichaAnamneseController extends Controller
 {
     private function autorizar(): void
@@ -23,21 +25,31 @@ class FichaAnamneseController extends Controller
     {
         $this->autorizar();
 
-        $fichas = FichaAnamnese::where('user_id', $userId)
+        $fichas = FichaAnamnese::with('anexos')
+            ->where('user_id', $userId)
             ->where('excluido', 0)
             ->latest()
             ->get()
             ->map(function (FichaAnamnese $f) {
-                $prev = trim((string) ($f->dados['queixas'] ?? ''));
-                if ($prev === '') {
-                    $prev = trim((string) ($f->dados['objetivo'] ?? ''));
+                if ($f->ehNota()) {
+                    $prev   = $f->observacao();
+                    $titulo = $f->titulo();
+                } else {
+                    $prev   = trim((string) ($f->dados['queixas'] ?? ''));
+                    if ($prev === '') {
+                        $prev = trim((string) ($f->dados['objetivo'] ?? ''));
+                    }
+                    $titulo = '';
                 }
                 return [
                     'id'           => $f->id,
+                    'tipo'         => $f->tipo,
+                    'titulo'       => $titulo,
                     'criada_em'    => $f->created_at?->format('d/m/Y H:i'),
                     'atualizada_em'=> $f->updated_at?->format('d/m/Y H:i'),
                     'preview'      => mb_substr($prev, 0, 80) . (mb_strlen($prev) > 80 ? '…' : ''),
-                    'imc'          => $f->imc(),
+                    'imc'          => $f->ehNota() ? null : $f->imc(),
+                    'qtd_anexos'   => $f->anexos->count(),
                     'criador'      => $f->criador?->name,
                 ];
             })
@@ -47,13 +59,14 @@ class FichaAnamneseController extends Controller
     }
 
     // Cria uma ficha vazia para o paciente escolhido e redireciona para a página
-    // de preenchimento.
+    // de preenchimento. `tipo` define se é anamnese (formulário) ou nota livre.
     public function store(Request $request)
     {
         $this->autorizar();
 
         $dados = $request->validate([
             'user_id' => ['required', 'integer', 'exists:users,id'],
+            'tipo'    => ['nullable', 'in:' . FichaAnamnese::TIPO_ANAMNESE . ',' . FichaAnamnese::TIPO_NOTA],
         ], [
             'user_id.required' => 'Selecione o paciente.',
             'user_id.exists'   => 'Paciente inválido.',
@@ -69,16 +82,22 @@ class FichaAnamneseController extends Controller
             return redirect()->back()->withErrors(['user_id' => 'Paciente inválido.'])->withInput();
         }
 
+        $tipo = $dados['tipo'] ?? FichaAnamnese::TIPO_ANAMNESE;
+
         $ficha = FichaAnamnese::create([
             'user_id'    => $paciente->id,
             'criado_por' => auth()->id(),
+            'tipo'       => $tipo,
             'dados'      => [],
         ]);
 
-        return redirect()->route('anamneses.edit', $ficha->id);
+        return redirect()->route(
+            $tipo === FichaAnamnese::TIPO_NOTA ? 'anamneses.nota.edit' : 'anamneses.edit',
+            $ficha->id
+        );
     }
 
-    // Página dedicada de preenchimento/edição da ficha.
+    // Página dedicada de preenchimento/edição da ficha de anamnese.
     public function edit($id)
     {
         $this->autorizar();
@@ -91,6 +110,101 @@ class FichaAnamneseController extends Controller
             'ficha'   => $ficha,
             'paciente'=> $ficha->user,
         ]);
+    }
+
+    // Página dedicada da anotação livre (título, observação e anexos).
+    public function editNota($id)
+    {
+        $this->autorizar();
+
+        $ficha = FichaAnamnese::with(['user', 'criador', 'anexos'])
+            ->where('excluido', 0)
+            ->where('tipo', FichaAnamnese::TIPO_NOTA)
+            ->findOrFail($id);
+
+        return view('anamneses.nota', [
+            'ficha'   => $ficha,
+            'paciente'=> $ficha->user,
+            'anexos'  => $ficha->anexos,
+        ]);
+    }
+
+    // Salva o título e a observação da nota (em JSON `dados`).
+    public function updateNota(Request $request, $id)
+    {
+        $this->autorizar();
+
+        $ficha = FichaAnamnese::where('excluido', 0)
+            ->where('tipo', FichaAnamnese::TIPO_NOTA)
+            ->findOrFail($id);
+
+        $v = $request->validate([
+            'titulo'     => ['nullable', 'string', 'max:200'],
+            'observacao' => ['nullable', 'string', 'max:20000'],
+        ]);
+
+        $ficha->dados = [
+            'titulo'     => trim((string) ($v['titulo'] ?? '')),
+            'observacao' => trim((string) ($v['observacao'] ?? '')),
+        ];
+        $ficha->save();
+
+        return redirect()->route('anamneses.nota.edit', $ficha->id)->with('msg', 'Nota salva!');
+    }
+
+    // Recebe um ou mais arquivos e anexa à nota. Ficam no disco `public`
+    // (fichas-notas/{ficha_id}/...). Até 5 arquivos por envio, 10 MB cada.
+    public function storeAnexo(Request $request, $id)
+    {
+        $this->autorizar();
+
+        $ficha = FichaAnamnese::where('excluido', 0)
+            ->where('tipo', FichaAnamnese::TIPO_NOTA)
+            ->findOrFail($id);
+
+        $v = $request->validate([
+            'arquivo'   => ['required', 'array', 'max:5'],
+            'arquivo.*' => ['file', 'max:10240', 'mimes:pdf,jpg,jpeg,png,gif,webp,doc,docx,xls,xlsx,txt'],
+        ], [
+            'arquivo.required' => 'Selecione ao menos um arquivo.',
+            'arquivo.max'      => 'Envie no máximo 5 arquivos por vez.',
+            'arquivo.*.file'   => 'Arquivo inválido.',
+            'arquivo.*.max'    => 'Cada arquivo deve ter no máximo 10 MB.',
+            'arquivo.*.mimes'  => 'Tipo de arquivo não permitido.',
+        ]);
+
+        $dir = 'fichas-notas/' . $ficha->id;
+        foreach ($v['arquivo'] as $file) {
+            // hashName() gera nome único (evita colisão/sobrescrita); mantém a
+            // extensão original. O nome original fica em nome_original.
+            $caminho = Storage::disk('public')->putFile($dir, $file);
+            if (!$caminho) {
+                return redirect()->route('anamneses.nota.edit', $ficha->id)
+                    ->with('msgErro', 'Falha ao salvar o arquivo "' . $file->getClientOriginalName() . '".');
+            }
+            FichaAnexo::create([
+                'ficha_id'      => $ficha->id,
+                'caminho'       => $caminho,
+                'nome_original' => $file->getClientOriginalName(),
+                'mime'          => $file->getMimeType(),
+                'tamanho'       => $file->getSize(),
+            ]);
+        }
+
+        return redirect()->route('anamneses.nota.edit', $ficha->id)
+            ->with('msg', count($v['arquivo']) . ' arquivo(s) anexado(s).');
+    }
+
+    // Remove um anexo (registro + arquivo físico).
+    public function destroyAnexo($id, $anexoId)
+    {
+        $this->autorizar();
+
+        $anexo = FichaAnexo::where('ficha_id', $id)->findOrFail($anexoId);
+        Storage::disk('public')->delete($anexo->caminho);
+        $anexo->delete();
+
+        return redirect()->route('anamneses.nota.edit', $id)->with('msg', 'Anexo removido.');
     }
 
     // Salva os campos preenchidos (em JSON `dados`). Estrutura espelha o Google

@@ -18,6 +18,9 @@
 # Claude Code (configs locais de máquina)
 .claude/settings.json
 .claude/settings.local.json
+# Briefings/notas em Markdown gerados pelo Claude na raiz (README.md permanece)
+/*.md
+!/README.md
 /node_modules
 /public/build
 /public/hot

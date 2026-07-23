@@ -150,4 +150,29 @@ class RegisteredUserController extends Controller
 
         return response()->json($users);
     }
+
+    /**
+     * Busca de clientes (autocomplete) para o formulário de agendamento.
+     * Retorna somente clientes reais (sem staff), sem paginação, limitado.
+     */
+    public function buscaClientes(Request $request)
+    {
+        abort_unless(auth()->user()->adm || auth()->user()->func, 403);
+
+        $q = trim($request->q);
+
+        $users = User::select(['id', 'name'])
+            ->where([['excluido', 0], ['func', 0], ['adm', 0]])
+            ->when($q !== '', function ($query) use ($q) {
+                $query->where(function ($q2) use ($q) {
+                    $q2->where('name', 'like', "%{$q}%")
+                       ->orWhere('whatsapp', 'like', "%{$q}%");
+                });
+            })
+            ->orderBy('name')
+            ->limit(15)
+            ->get();
+
+        return response()->json(['data' => $users]);
+    }
 }

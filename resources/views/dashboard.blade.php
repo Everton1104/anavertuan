@@ -523,7 +523,27 @@
                 <form method="POST" id="form-add-agenda" action="{{ route('agenda.store') }}" novalidate>
                     @csrf
                     @method('post')
-                    <x-app.select label="Cliente" name="user_id" required="true" :options="$clientes->pluck('name', 'id')" />
+                    @php
+                        $oldCliente = old('user_id') ? $clientes->firstWhere('id', old('user_id')) : null;
+                    @endphp
+                    <div class="mb-3 position-relative" id="cliente-ac-wrap">
+                        <label for="cliente_search" class="form-label">Cliente</label>
+                        <input
+                            type="text"
+                            id="cliente_search"
+                            class="form-control {{ $errors->has('user_id') ? 'is-invalid' : '' }}"
+                            autocomplete="off"
+                            placeholder="Digite o nome do cliente..."
+                            value="{{ $oldCliente?->name ?? '' }}"
+                            oninput="clienteAcInput()"
+                            onkeydown="clienteAcKeydown(event)"
+                        />
+                        <input type="hidden" name="user_id" id="user_id" value="{{ old('user_id') }}" />
+                        <ul id="cliente_ac_list" class="list-group position-absolute w-100 d-none" style="z-index: 20; max-height: 240px; overflow-y: auto; box-shadow: 0 2px 6px rgba(0,0,0,.15);"></ul>
+                        @error('user_id')
+                            <div class="invalid-feedback d-block">{{ $message }}</div>
+                        @enderror
+                    </div>
                     {{-- Especial (encaixe): pode ser aplicado a qualquer serviço e colocado sobre
                          outros agendamentos. O serviço (nome+duração) vem do pacote escolhido em
                          "Descontar de"; no encaixe livre (sem desconto) é escolhido no catálogo. --}}
@@ -911,6 +931,7 @@
         function abrirNovoAgendamento() {
             document.getElementById('agendamento_id').value = '';
             document.getElementById('user_id').value = '';
+            const csNovo = document.getElementById('cliente_search'); if (csNovo) { csNovo.value = ''; csNovo.classList.remove('is-invalid'); }
             document.getElementById('duracao_especial').value = '';
             popularSelectServicos('');
             document.getElementById('dia_selecionado').value = '';
@@ -931,6 +952,8 @@
                     const c = res.data;
 
                     document.getElementById('user_id').value       = c.user_id;
+                    const csEdit = document.getElementById('cliente_search');
+                    if (csEdit) { csEdit.value = consultaMap[id]?.user?.name ?? ''; csEdit.classList.remove('is-invalid'); }
                     document.getElementById('agendamento_id').value = c.id;
                     document.getElementById('dia_selecionado').value = c.data_inicio.split(' ')[0];
                     document.getElementById('hora_selecionada').value = c.data_inicio.split(' ')[1].substring(0, 5);
@@ -1427,6 +1450,117 @@
                 if (cb) cb();
             }).catch(() => { creditosClienteAtual = []; aplicarModoEspecial(); if (cb) cb(); });
         }
+
+        // ── Autocomplete de cliente (Novo Agendamento) ──────────────────────
+        // O input visível #cliente_search filtra os nomes via axios; o id
+        // selecionado vai no hidden #user_id, mantendo o POST e o handler de
+        // change existente (que recarrega pacotes/serviços do cliente).
+        let clienteAcTimer = null;
+        let clienteAcItens = []; // [{id, name}]
+        let clienteAcIdx = -1;
+
+        function escapeHtmlCliente(s) {
+            return String(s).replace(/[&<>"']/g, m => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+            }[m]));
+        }
+
+        function clienteAcInput() {
+            const input = document.getElementById('cliente_search');
+            const ul = document.getElementById('cliente_ac_list');
+            const q = input.value.trim();
+
+            // Texto vazio = cliente desmarcado (dispara o change para resetar pacotes)
+            if (q === '') {
+                const hidden = document.getElementById('user_id');
+                if (hidden.value !== '') {
+                    hidden.value = '';
+                    hidden.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+                ul.classList.add('d-none');
+                ul.innerHTML = '';
+                clienteAcItens = [];
+                return;
+            }
+
+            clearTimeout(clienteAcTimer);
+            clienteAcTimer = setTimeout(() => {
+                axios.get('/api/clientes-busca', { params: { q } })
+                    .then(res => renderClienteAc(res.data.data || []))
+                    .catch(() => renderClienteAc([]));
+            }, 250);
+        }
+
+        function renderClienteAc(lista) {
+            clienteAcItens = lista;
+            clienteAcIdx = -1;
+            const ul = document.getElementById('cliente_ac_list');
+            if (!lista.length) {
+                ul.innerHTML = '<li class="list-group-item text-muted">Nenhum cliente encontrado</li>';
+                ul.classList.remove('d-none');
+                return;
+            }
+            ul.innerHTML = lista.map((c, i) =>
+                `<li class="list-group-item list-group-item-action py-2" style="cursor:pointer" onmousedown="selecionarCliente(${i}); event.preventDefault();">${escapeHtmlCliente(c.name)}</li>`
+            ).join('');
+            ul.classList.remove('d-none');
+        }
+
+        function selecionarCliente(i) {
+            const c = clienteAcItens[i];
+            if (!c) return;
+            document.getElementById('cliente_search').value = c.name;
+            const hidden = document.getElementById('user_id');
+            hidden.value = c.id;
+            hidden.classList.remove('is-invalid');
+            document.getElementById('cliente_ac_list').classList.add('d-none');
+            clienteAcIdx = -1;
+            // Mesmo handler de change do antigo select: recarrega pacotes/serviços.
+            hidden.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        function marcarClienteAc() {
+            document.querySelectorAll('#cliente_ac_list li').forEach((li, i) => {
+                li.classList.toggle('active', i === clienteAcIdx);
+            });
+            const ativo = document.querySelector('#cliente_ac_list li.active');
+            if (ativo) ativo.scrollIntoView({ block: 'nearest' });
+        }
+
+        function clienteAcKeydown(e) {
+            const ul = document.getElementById('cliente_ac_list');
+            if (!ul || ul.classList.contains('d-none') || !clienteAcItens.length) return;
+
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                clienteAcIdx = (clienteAcIdx + 1) % clienteAcItens.length;
+                marcarClienteAc();
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                clienteAcIdx = (clienteAcIdx - 1 + clienteAcItens.length) % clienteAcItens.length;
+                marcarClienteAc();
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                if (clienteAcIdx >= 0) selecionarCliente(clienteAcIdx);
+            } else if (e.key === 'Escape') {
+                ul.classList.add('d-none');
+            }
+        }
+
+        // Fecha a lista ao clicar fora do campo
+        document.addEventListener('click', (e) => {
+            const wrap = document.getElementById('cliente-ac-wrap');
+            if (wrap && !wrap.contains(e.target)) {
+                document.getElementById('cliente_ac_list')?.classList.add('d-none');
+            }
+        });
+
+        // Feedback imediato no submit se nenhum cliente foi selecionado
+        document.getElementById('form-add-agenda')?.addEventListener('submit', function () {
+            if (!document.getElementById('user_id').value) {
+                document.getElementById('cliente_search').classList.add('is-invalid');
+            }
+        });
 
         // Ao trocar o cliente no Novo Agendamento, recarrega os pacotes disponíveis e reinicia a seleção.
         document.getElementById('user_id')?.addEventListener('change', function () {

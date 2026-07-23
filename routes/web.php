@@ -75,6 +75,7 @@ Route::post('add-usuario', [RegisteredUserController::class, 'store'])->middlewa
 Route::post('delete-usuario', [RegisteredUserController::class, 'delete'])->middleware('auth')->name('delete-usuario');
 Route::post('editar-usuario', [RegisteredUserController::class, 'editar'])->middleware('auth')->name('editar-usuario');
 Route::get('usuarios-search', [RegisteredUserController::class, 'search'])->middleware('auth')->name('usuarios.search');
+Route::get('api/clientes-busca', [RegisteredUserController::class, 'buscaClientes'])->middleware('auth')->name('clientes.busca');
 
 // ── Créditos/serviços contratados por cliente (somente staff) ─────────────────
 Route::middleware('auth')->group(function () {

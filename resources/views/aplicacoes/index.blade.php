@@ -148,6 +148,7 @@
                             <th class="text-end">Ampolas</th>
                             <th class="text-end">UI/Ampola</th>
                             <th class="text-end">Total UI</th>
+                            <th class="text-end">UI Disp.</th>
                             <th class="text-end">Valor Total</th>
                             <th class="text-end">Custo/UI</th>
                         </tr>
@@ -165,11 +166,12 @@
                             <td class="text-end">{{ $f->ampolas_compradas }}</td>
                             <td class="text-end">{{ $f->ui_por_ampola }}</td>
                             <td class="text-end">{{ number_format($f->total_ui, 0, ',', '.') }}</td>
+                            <td class="text-end {{ ($saldoPorFornecedor[$f->id] ?? 0) < 0 ? 'text-danger' : '' }}">{{ number_format($saldoPorFornecedor[$f->id] ?? 0, 0, ',', '.') }}</td>
                             <td class="text-end">R$ {{ number_format($f->valor_total, 2, ',', '.') }}</td>
                             <td class="text-end">R$ {{ number_format($f->custo_por_ui, 4, ',', '.') }}</td>
                         </tr>
                         @empty
-                        <tr><td colspan="9" class="text-muted text-center py-3">Nenhum fornecedor cadastrado.</td></tr>
+                        <tr><td colspan="10" class="text-muted text-center py-3">Nenhum fornecedor cadastrado.</td></tr>
                         @endforelse
                     </tbody>
                 </table>
@@ -201,17 +203,22 @@
                             {{-- Balanço do mês --}}
                             <div class="balanco-box p-3 mb-3">
                                 <div class="row g-3 text-center">
-                                    <div class="col-4">
+                                    <div class="col-6 col-md-3">
                                         <div class="fw-semibold text-muted small">Comprado no mês</div>
                                         <div class="fs-6 text-danger">R$ {{ number_format($mes->comprado_valor, 2, ',', '.') }}</div>
                                         <div class="small text-muted">{{ number_format($mes->comprado_ui, 0, ',', '.') }} UI</div>
                                     </div>
-                                    <div class="col-4">
+                                    <div class="col-6 col-md-3">
                                         <div class="fw-semibold text-muted small">Vendido no mês</div>
                                         <div class="fs-6 text-success m-vendido">R$ {{ number_format($mes->vendido_valor, 2, ',', '.') }}</div>
                                         <div class="small text-muted"><span class="m-ui-vendido">{{ number_format($mes->ui_vendido, 0, ',', '.') }}</span> UI</div>
                                     </div>
-                                    <div class="col-4">
+                                    <div class="col-6 col-md-3">
+                                        <div class="fw-semibold text-muted small">Custo medicamento</div>
+                                        <div class="fs-6 text-danger m-custo">R$ {{ number_format($mes->custo, 2, ',', '.') }}</div>
+                                        <div class="small text-muted">pelo lote usado</div>
+                                    </div>
+                                    <div class="col-6 col-md-3">
                                         <div class="fw-semibold text-muted small">Lucro do mês</div>
                                         <div class="fs-6 fw-bold m-lucro {{ $mes->lucro >= 0 ? 'text-success' : 'text-danger' }}">R$ {{ number_format($mes->lucro, 2, ',', '.') }}</div>
                                     </div>
@@ -228,13 +235,16 @@
                                             <th>Serviço</th>
                                             <th>Data</th>
                                             <th class="text-end">Unidades</th>
-                                            <th class="text-end" style="width:150px">Valor pago (R$)</th>
-                                            <th class="text-end" style="width:150px">UI aplicado</th>
+                                            <th class="text-end" style="width:140px">Valor pago (R$)</th>
+                                            <th class="text-end" style="width:90px">UI aplicado</th>
+                                            <th style="width:200px">Lote (fornecedor)</th>
+                                            <th class="text-end">Custo</th>
+                                            <th class="text-end">Margem</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         @foreach($mes->consultas as $c)
-                                        <tr>
+                                        <tr data-custo-ui="{{ $c->custo_unitario }}">
                                             <td>{{ $c->cliente }}</td>
                                             <td>{{ $c->servico }}</td>
                                             <td>{{ $c->data->format('d/m/Y') }}</td>
@@ -253,6 +263,18 @@
                                                        value="{{ $c->ui }}"
                                                        onchange="salvarCampo(this, 'ui')">
                                             </td>
+                                            <td>
+                                                <select class="form-select form-select-sm inp-forn"
+                                                        data-ag="{{ $c->agendamento_id }}"
+                                                        onchange="salvarCampo(this, 'fornecedor_id')">
+                                                    <option value="">— lote —</option>
+                                                    @foreach($fornecedoresLista as $fl)
+                                                    <option value="{{ $fl['id'] }}" @selected((string) ($c->fornecedor_id ?? '') === (string) $fl['id'])>{{ $fl['label'] }}</option>
+                                                    @endforeach
+                                                </select>
+                                            </td>
+                                            <td class="text-end custo-cell">{{ number_format($c->custo, 2, ',', '.') }}</td>
+                                            <td class="text-end margem-cell {{ $c->margem >= 0 ? 'text-success' : 'text-danger' }}">{{ number_format($c->margem, 2, ',', '.') }}</td>
                                         </tr>
                                         @endforeach
                                     </tbody>
@@ -268,6 +290,49 @@
             @empty
             <p class="text-muted mb-0">Nenhuma movimentação. Marque um serviço como Mounjaro e agende uma consulta, ou cadastre um fornecedor.</p>
             @endforelse
+        </div>
+    </div>
+
+    {{-- ── RENTABILIDADE POR PACIENTE ─────────────────────────────────────── --}}
+    <div class="card shadow my-3">
+        <div class="card-header">Rentabilidade por paciente</div>
+        <div class="card-body">
+            <p class="text-muted small mb-3">
+                Lucro acumulado por cliente (todos os meses). Como preço e dosagem são independentes,
+                o lucro varia bastante entre pacientes — esta visão mostra quem subsidia quem.
+            </p>
+            @if($rentabilidadePorPaciente->isNotEmpty())
+            <div class="table-responsive">
+                <table class="table table-sm table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Paciente</th>
+                            <th class="text-end">Consultas</th>
+                            <th class="text-end">UI total</th>
+                            <th class="text-end">Receita</th>
+                            <th class="text-end">Custo med.</th>
+                            <th class="text-end">Lucro</th>
+                            <th class="text-end">Margem</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($rentabilidadePorPaciente as $p)
+                        <tr>
+                            <td>{{ $p->cliente }}</td>
+                            <td class="text-end">{{ $p->consultas }}</td>
+                            <td class="text-end">{{ number_format($p->ui, 0, ',', '.') }}</td>
+                            <td class="text-end">R$ {{ number_format($p->receita, 2, ',', '.') }}</td>
+                            <td class="text-end">R$ {{ number_format($p->custo, 2, ',', '.') }}</td>
+                            <td class="text-end fw-bold {{ $p->lucro >= 0 ? 'text-success' : 'text-danger' }}">R$ {{ number_format($p->lucro, 2, ',', '.') }}</td>
+                            <td class="text-end">{{ number_format($p->margem_pct, 1, ',', '.') }}%</td>
+                        </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+            @else
+            <p class="text-muted small mb-0">Sem dados de pacientes ainda.</p>
+            @endif
         </div>
     </div>
 </div>
@@ -287,7 +352,8 @@ $fornecedoresJs = $fornecedores->map(fn($f) => [
 @section('scriptEnd')
 <script>
     const fornecedoresData = @json($fornecedoresJs);
-    const CUSTO_POR_UI     = {{ $custoPorUi }};
+    const CUSTO_POR_UI     = {{ $custoPorUi }};           // fallback: dose sem lote amarrado
+    const CUSTO_FORNECEDOR = @json($custoFornecedorJs);   // { loteId: custo_por_ui do lote }
     const UI_COMPRADO      = {{ $uiComprado }};
 
     const brl = n => 'R$ ' + (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -298,8 +364,14 @@ $fornecedoresJs = $fornecedores->map(fn($f) => [
         if (v == null) return 0;
         v = String(v).trim().replace(/\s|R\$/g, '');
         if (v === '') return 0;
-        v = v.replace(/\./g, '').replace(',', '.');
-        const n = parseFloat(v);
+        let n;
+        if (v.includes(',')) {
+            // formato BR ("1.250,50"): remove os milhares e vírgula vira ponto decimal
+            n = parseFloat(v.replace(/\./g, '').replace(',', '.'));
+        } else {
+            // sem vírgula: "150" ou "150.5" — ponto já é o decimal
+            n = parseFloat(v);
+        }
         return isNaN(n) ? 0 : n;
     }
     const fmtMoeda = n => (n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -365,13 +437,18 @@ $fornecedoresJs = $fornecedores->map(fn($f) => [
             val = input.value.trim() === '' ? null : parseMoeda(input.value);
             input.value = val === null ? '' : fmtMoeda(val);
         } else {
+            // ui ou fornecedor_id: envia direto (número/id), vazio => null.
             val = input.value === '' ? null : input.value;
         }
 
         axios.post(`/aplicacoes/doses/${ag}`, { [field]: val })
-            .then(() => {
+            .then(resp => {
                 input.classList.add('inp-ok');
                 setTimeout(() => input.classList.remove('inp-ok'), 1200);
+                // Sincroniza lote/custo da linha: ao salvar UI ou valor o backend pode
+                // ter auto-atribuído um lote FIFO, então atualizamos sempre.
+                const sel = input.closest('tr')?.querySelector('.inp-forn');
+                if (sel) aplicarLote(sel, resp.data?.fornecedor_id ?? null);
                 recalcMes(input.closest('.mes-card'));
                 recalcResumo();
             })
@@ -381,37 +458,70 @@ $fornecedoresJs = $fornecedores->map(fn($f) => [
             });
     }
 
-    function somaInputs(scope, selector, parser) {
-        const fn = parser || (v => parseFloat(v) || 0);
-        return [...scope.querySelectorAll(selector)]
-            .reduce((acc, el) => acc + fn(el.value), 0);
+    // Custo unitário efetivo de uma linha: do lote selecionado, ou fallback global.
+    function custoUnitarioDe(fornId) {
+        return fornId ? (CUSTO_FORNECEDOR[fornId] ?? CUSTO_POR_UI) : CUSTO_POR_UI;
+    }
+
+    // Sincroniza o <select> de lote e o data-custo-ui da linha após salvar (o
+    // backend pode ter auto-atribuído um lote FIFO).
+    function aplicarLote(selectEl, fornId) {
+        const tr = selectEl.closest('tr');
+        if (String(selectEl.value) !== String(fornId ?? '')) selectEl.value = fornId ?? '';
+        tr.dataset.custoUi = custoUnitarioDe(fornId);
+    }
+
+    // Percorre as linhas de consulta de um escopo (card ou documento), somando
+    // receita/ui/custo pelo custo unitário de cada linha. Atualiza também as
+    // células "Custo" e "Margem" de cada linha e retorna os totais.
+    function totalizar(scope) {
+        let receita = 0, ui = 0, custo = 0;
+        scope.querySelectorAll('tr[data-custo-ui]').forEach(tr => {
+            const valorEl = tr.querySelector('.inp-valor');
+            if (!valorEl) return;
+            const valor = parseMoeda(valorEl.value);
+            const u     = parseFloat(tr.querySelector('.inp-ui')?.value) || 0;
+            const cu    = parseFloat(tr.dataset.custoUi) || 0;
+            const custoLinha = u * cu;
+            const margem     = valor - custoLinha;
+            receita += valor; ui += u; custo += custoLinha;
+
+            const custoCell  = tr.querySelector('.custo-cell');
+            const margemCell = tr.querySelector('.margem-cell');
+            if (custoCell)  custoCell.textContent  = fmtMoeda(custoLinha);
+            if (margemCell) {
+                margemCell.textContent = fmtMoeda(margem);
+                margemCell.classList.toggle('text-success', margem >= 0);
+                margemCell.classList.toggle('text-danger',  margem < 0);
+            }
+        });
+        return { receita, ui, custo };
     }
 
     function recalcMes(card) {
         if (!card) return;
-        const vendido = somaInputs(card, '.inp-valor', parseMoeda);
-        const ui      = somaInputs(card, '.inp-ui');
-        const lucro   = vendido - ui * CUSTO_POR_UI;
+        const { receita, ui, custo } = totalizar(card);
+        const lucro = receita - custo;
 
-        card.querySelector('.m-vendido').textContent    = brl(vendido);
+        card.querySelector('.m-vendido').textContent    = brl(receita);
         card.querySelector('.m-ui-vendido').textContent = intBr(ui);
+        const custoEl = card.querySelector('.m-custo');
+        if (custoEl) custoEl.textContent = brl(custo);
         const lucroEl = card.querySelector('.m-lucro');
         lucroEl.textContent = brl(lucro);
         lucroEl.classList.toggle('text-success', lucro >= 0);
-        lucroEl.classList.toggle('text-danger', lucro < 0);
+        lucroEl.classList.toggle('text-danger',  lucro < 0);
     }
 
     function recalcResumo() {
-        const doc       = document;
-        const recebido  = somaInputs(doc, '.inp-valor', parseMoeda);
-        const uiVendido = somaInputs(doc, '.inp-ui');
-        const custo     = uiVendido * CUSTO_POR_UI;
-        const lucro     = recebido - custo;
-        const restante  = UI_COMPRADO - uiVendido;
+        const { receita, ui, custo } = totalizar(document);
+        const lucro    = receita - custo;
+        const restante = UI_COMPRADO - ui;
+        const doc      = document;
 
-        doc.getElementById('resumo-recebido').textContent    = brl(recebido);
-        doc.getElementById('resumo-custo').textContent       = brl(custo);
-        doc.getElementById('resumo-ui-vendido').textContent  = intBr(uiVendido);
+        doc.getElementById('resumo-recebido').textContent   = brl(receita);
+        doc.getElementById('resumo-custo').textContent      = brl(custo);
+        doc.getElementById('resumo-ui-vendido').textContent = intBr(ui);
 
         const restEl = doc.getElementById('resumo-ui-restante');
         restEl.textContent = intBr(restante);
@@ -420,7 +530,7 @@ $fornecedoresJs = $fornecedores->map(fn($f) => [
         const lucroEl = doc.getElementById('resumo-lucro');
         lucroEl.textContent = brl(lucro);
         lucroEl.classList.toggle('text-success', lucro >= 0);
-        lucroEl.classList.toggle('text-danger', lucro < 0);
+        lucroEl.classList.toggle('text-danger',  lucro < 0);
     }
 </script>
 @endsection

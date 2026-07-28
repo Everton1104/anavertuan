@@ -26,4 +26,11 @@ class DoseMounjaro extends Model
     {
         return $this->belongsTo(AgendamentoModel::class, 'agendamento_id');
     }
+
+    // Custo unitário específico do lote amarrado à dose (custo_por_ui do fornecedor).
+    // NULL quando não há lote — nesse caso o cálculo usa o custo médio global como fallback.
+    public function getCustoUnitarioAttribute(): ?float
+    {
+        return $this->fornecedor?->custo_por_ui;
+    }
 }

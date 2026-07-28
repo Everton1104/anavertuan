@@ -39,19 +39,14 @@ class AgendamentoModel extends Model
         return $date->format('Y-m-d H:i:s');
     }
 
-    // Expõe o status de cada lembrete e o nome de exibição do serviço no JSON
+    // Expõe o status do lembrete da véspera e o nome de exibição do serviço no JSON
     // (consumidos pelos cards do dashboard).
-    protected $appends = ['lembrete_24h', 'lembrete_2h', 'servico_display'];
+    protected $appends = ['lembrete_24h', 'servico_display'];
 
     // 'enviado' | 'erro' | null (ainda não disparado)
     public function getLembrete24hAttribute(): ?string
     {
         return $this->lembretes->firstWhere('tipo', '24h')?->status;
-    }
-
-    public function getLembrete2hAttribute(): ?string
-    {
-        return $this->lembretes->firstWhere('tipo', '2h')?->status;
     }
 
     public function servico()

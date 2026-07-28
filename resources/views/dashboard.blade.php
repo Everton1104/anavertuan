@@ -820,8 +820,6 @@
                                                     <div>
                                                         @if($consulta->confirmado)
                                                             <span class="badge bg-success mb-1">✓ Confirmado</span>
-                                                        @elseif($consulta->pre_confirmado_em)
-                                                            <span class="badge bg-info text-dark mb-1">Pré-confirmado</span>
                                                         @elseif($isStaff)
                                                             <span class="badge bg-warning text-dark mb-1">Pendente confirmação</span>
                                                         @else
@@ -833,11 +831,8 @@
                                                         @if($isStaff)
                                                             <div class="d-flex flex-column gap-1 mt-2">
                                                                 {!! $confirmaLinha(
-                                                                    $lembreteBadge($consulta->lembrete_24h, 'Véspera', $consulta->pre_confirmado_em ? 'bg-info text-dark' : 'bg-success'),
-                                                                    $consulta->pre_confirmado_em, 'Pré-confirmou em:', 'bg-info text-dark', $consulta->lembrete_24h) !!}
-                                                                {!! $confirmaLinha(
-                                                                    $lembreteBadge($consulta->lembrete_2h, '2h antes'),
-                                                                    $consulta->confirmado_em, 'Confirmou em:', 'bg-success', $consulta->lembrete_2h) !!}
+                                                                    $lembreteBadge($consulta->lembrete_24h, 'Véspera'),
+                                                                    $consulta->confirmado_em, 'Confirmou em:', 'bg-success', $consulta->lembrete_24h) !!}
                                                             </div>
                                                         @endif
                                                     </div>
@@ -912,10 +907,8 @@
                 user_id: {{ $c->user_id }},
                 servico_id: {{ $c->servico_id }},
                 confirmado: {{ $c->confirmado ? 'true' : 'false' }},
-                pre_confirmado_em: @json($c->pre_confirmado_em),
                 confirmado_em: @json($c->confirmado_em),
                 lembrete_24h: @json($c->lembrete_24h),
-                lembrete_2h: @json($c->lembrete_2h),
                 user: { name: @json($c->user->name) },
                 servico: { descricao: @json($c->servico->descricao ?? ''), retirada: {{ $c->servico?->retirada ? 'true' : 'false' }} },
                 data_inicio: @json($c->data_inicio->format('Y-m-d H:i:s')),
@@ -1094,7 +1087,6 @@
         // Badge de status geral de confirmação no card JS (espelha o render do servidor)
         function statusConfirmacaoBadge(c) {
             if (c.confirmado) return '<span class="badge bg-success mb-1">✓ Confirmado</span><br>';
-            if (c.pre_confirmado_em) return '<span class="badge bg-info text-dark mb-1">Pré-confirmado</span><br>';
             return '<span class="badge bg-warning text-dark mb-1">Pendente confirmação</span><br>';
         }
 
@@ -2065,8 +2057,7 @@
                                         <strong>Paciente:</strong> ${nomePaciente.textContent}<br>
                                         <strong>Serviço:</strong> ${nomeServico.textContent}
                                         <div class="d-flex flex-column gap-1 mt-2">
-                                            ${confirmaLinha(lembreteBadge(c.lembrete_24h, 'Véspera', c.pre_confirmado_em ? 'bg-info text-dark' : 'bg-success'), c.pre_confirmado_em, 'Pré-confirmou em:', 'bg-info text-dark', c.lembrete_24h)}
-                                            ${confirmaLinha(lembreteBadge(c.lembrete_2h, '2h antes'), c.confirmado_em, 'Confirmou em:', 'bg-success', c.lembrete_2h)}
+                                            ${confirmaLinha(lembreteBadge(c.lembrete_24h, 'Véspera'), c.confirmado_em, 'Confirmou em:', 'bg-success', c.lembrete_24h)}
                                         </div>
                                     </div>
                                 </div>

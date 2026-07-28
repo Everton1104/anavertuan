@@ -561,8 +561,8 @@ class AgendaController extends Controller
             return response()->json(['error' => $resultado['msg'] ?? 'Falha ao enviar lembrete.'], 422);
         }
 
-        // Envio manual substitui a véspera: marca o lembrete '24h' como enviado para o
-        // cron diário não reenviar. O de '2h' continua liberado e será disparado pelo cron.
+        // Marca o lembrete de 24h como enviado: o reenvio manual vale como o
+        // lembrete da véspera, evitando que o cron diário reenvie e duplique.
         LembreteConsulta::updateOrCreate(
             ['agendamento_id' => $agendamento->id, 'tipo' => '24h'],
             ['status' => 'enviado', 'erro_msg' => null],

@@ -100,10 +100,18 @@ class WhatsappController extends Controller
     // entre o webhook direto da Meta (getMsgs) e o callback do gateway (inbound).
     private function rotearButtonPayload(string $phoneId, string $number, string $payload): void
     {
+        // Botões 'confirmar_pre_*' vinham do antigo lembrete da véspera (pré-confirmação).
+        // Esse fluxo foi unificado: a véspera agora envia 'confirmar_*'. Restam apenas
+        // botões antigos já entregues no telefone do cliente — respondemos que expirou
+        // em vez de deixar cair no ramo 'confirmar_' (o 'pre_' viraria id inválido/0).
         if (str_starts_with($payload, 'confirmar_pre_')) {
-            $id = (int) str_replace('confirmar_pre_', '', $payload);
-            $this->tratarPreConfirmacao($phoneId, $number, $id);
-        } elseif (str_starts_with($payload, 'confirmar_')) {
+            self::enviarMsg($phoneId, $number,
+                'Este link de confirmação expirou. Você receberá um novo lembrete em breve. 😊'
+            );
+            return;
+        }
+
+        if (str_starts_with($payload, 'confirmar_')) {
             $id = (int) str_replace('confirmar_', '', $payload);
             $this->tratarConfirmacao($phoneId, $number, $id);
         } elseif (str_starts_with($payload, 'reagendar_')) {
@@ -154,39 +162,8 @@ class WhatsappController extends Controller
 
     // ── Tratamento de respostas de botões ────────────────────────────────────
 
-    // Pré-confirmação: cliente respondeu o lembrete da véspera.
-    private function tratarPreConfirmacao(string $phoneId, string $number, int $agendamentoId): void
-    {
-        $agendamento = AgendamentoModel::with('user')->find($agendamentoId);
-        if (!$agendamento) return;
-
-        // Botão de um agendamento que já passou: ignora o clique (evita confirmar
-        // consultas antigas via lembrete expirado).
-        if (Carbon::parse($agendamento->data_inicio)->isPast()) {
-            self::enviarMsg($phoneId, $number, 'Este agendamento já passou e não pode mais ser confirmado. Se precisar de um novo horário, fale com a equipe. 😊');
-            return;
-        }
-
-        // Mantém o primeiro horário de pré-confirmação; ignora cliques repetidos.
-        if (!$agendamento->pre_confirmado_em) {
-            $agendamento->pre_confirmado_em = now();
-            $agendamento->save();
-        }
-
-        $nome          = ucfirst($agendamento->user->name ?? 'você');
-        $nomeComercial = env('WHATSAPP_NOME_COMERCIAL', config('app.name'));
-        $data          = Carbon::parse($agendamento->data_inicio)
-                             ->locale('pt_BR')
-                             ->translatedFormat('d \d\e F');
-        $hora          = Carbon::parse($agendamento->data_inicio)->format('H:i');
-
-        self::enviarMsg($phoneId, $number,
-            "Obrigado por confirmar, {$nome}! ✅ Sua presença para o dia *{$data}* às *{$hora}* está pré-confirmada.\n\n"
-            . "No dia da consulta enviaremos uma última confirmação. Até lá! 😊"
-        );
-    }
-
-    // Confirmação oficial: cliente respondeu o lembrete de 2h antes (ou staff confirmou manualmente).
+    // Confirmação: cliente confirmou o lembrete da véspera (ou a equipe disparou o
+    // "Enviar pedido de confirmação agora" / confirmou manualmente no painel).
     private function tratarConfirmacao(string $phoneId, string $number, int $agendamentoId): void
     {
         $agendamento = AgendamentoModel::with('user')->find($agendamentoId);

@@ -35,7 +35,7 @@ class EnviarLembretesConsulta extends Command
             return;
         }
 
-        // Lembrete da véspera: roda uma vez ao dia (17h) e cobre TODAS as consultas do dia seguinte.
+        // Lembrete da véspera: roda uma vez ao dia (19h) e cobre TODAS as consultas do dia seguinte.
         $amanha = now()->addDay();
         $this->enviarLembretes($amanha->copy()->startOfDay(), $amanha->copy()->endOfDay(), $phoneId, $template);
     }

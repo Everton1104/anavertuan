@@ -1,0 +1,12 @@
+# O servidor vinha servindo .mjs como text/plain, o que faz o navegador bloquear
+# os ES modules do PDF.js ("Expected a JavaScript module script...") e o leitor
+# não carregar o documento. Aqui forçamos o MIME correto de JavaScript.
+<IfModule mod_mime.c>
+    AddType text/javascript .mjs
+    AddType application/javascript .mjs
+</IfModule>
+<IfModule mod_headers.c>
+    <FilesMatch "\.mjs$">
+        ForceType text/javascript
+    </FilesMatch>
+</IfModule>

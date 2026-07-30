@@ -9,8 +9,16 @@
     $titulo      = old('titulo', $dados['titulo'] ?? '');
     $observacao  = old('observacao', $dados['observacao'] ?? '');
 
-    // Disco public — mesmo dos logos/imagens do site.
-    $urlAnexo = fn($caminho) => Storage::disk('public')->url($caminho);
+    // Classifica o anexo pra escolher o leitor: pdf (PDF.js), imagem (preview) ou
+    // outro (só download). Os anexos são servidos pela rota autenticada
+    // anamneses.anexo.show — não mais por URL pública do disco public.
+    $extensao  = fn($nome) => strtolower(pathinfo((string) $nome, PATHINFO_EXTENSION));
+    $tipoAnexo = function ($anexo) use ($extensao) {
+        $mime = strtolower((string) $anexo->mime);
+        if (str_contains($mime, 'pdf') || $extensao($anexo->nome_original) === 'pdf') return 'pdf';
+        if (str_starts_with($mime, 'image/') || in_array($extensao($anexo->nome_original), ['jpg','jpeg','png','gif','webp'], true)) return 'imagem';
+        return 'outro';
+    };
 
     // Formata bytes em KB/MB legível.
     $humano = function ($bytes) {
@@ -81,12 +89,22 @@
             @if($anexos->isNotEmpty())
                 <ul class="list-group mb-3">
                     @foreach($anexos as $anexo)
+                        @php
+                            $tipo    = $tipoAnexo($anexo);
+                            $urlShow = route('anamneses.anexo.show', [$ficha->id, $anexo->id]);
+                        @endphp
                         <li class="list-group-item d-flex justify-content-between align-items-center gap-2 flex-wrap">
-                            <a href="{{ $urlAnexo($anexo->caminho) }}" target="_blank" rel="noopener" class="text-decoration-none">
+                            <span class="text-break">
                                 📄 {{ $anexo->nome_original }}
-                            </a>
-                            <span class="d-flex align-items-center gap-3">
-                                @if($anexo->tamanho)<span class="badge bg-light text-dark border">{{ $humano($anexo->tamanho) }}</span>@endif
+                                @if($anexo->tamanho)<span class="badge bg-light text-dark border ms-1">{{ $humano($anexo->tamanho) }}</span>@endif
+                            </span>
+                            <span class="d-flex align-items-center gap-2">
+                                @if(in_array($tipo, ['pdf', 'imagem'], true))
+                                    <button type="button" class="btn btn-sm btn-outline-dark"
+                                            data-abrir-anexo data-tipo="{{ $tipo }}" data-url="{{ $urlShow }}"
+                                            data-nome="{{ $anexo->nome_original }}">Visualizar</button>
+                                @endif
+                                <a class="btn btn-sm btn-outline-secondary" href="{{ $urlShow }}?download=1" target="_blank" rel="noopener">Baixar</a>
                                 <form method="POST" action="{{ route('anamneses.anexo.destroy', [$ficha->id, $anexo->id]) }}"
                                       onsubmit="return confirm('Remover este anexo? O arquivo será excluído.')">
                                     @csrf
@@ -125,4 +143,64 @@
         </form>
     </div>
 </div>
+
+{{-- ============ MODAL LEITOR DE ANEXOS (PDF.js / imagem) ============ --}}
+<div class="modal fade" id="modalAnexo" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-fullscreen">
+        <div class="modal-content">
+            <div class="modal-header" style="background:var(--marrom); color:#fff;">
+                <h5 class="modal-title text-break pe-3" id="tituloAnexo">Anexo</h5>
+                <div class="ms-auto d-flex align-items-center gap-2">
+                    <a id="baixarAnexo" class="btn btn-sm btn-outline-light" href="#" target="_blank" rel="noopener">Baixar</a>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+            </div>
+            <div class="modal-body p-0" style="position:relative; overflow:hidden; background:#525659;">
+                <div id="containerAnexo" style="position:absolute; inset:0;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+@endsection
+
+@section('scriptEnd')
+<script>
+    (function () {
+        var modalEl    = document.getElementById('modalAnexo');
+        if (!modalEl) return;
+        var container  = document.getElementById('containerAnexo');
+        var titulo     = document.getElementById('tituloAnexo');
+        var baixar     = document.getElementById('baixarAnexo');
+        var modal      = bootstrap.Modal.getOrCreateInstance(modalEl);
+        var VIEWER     = '/vendor/pdfjs/web/viewer.html?file=';
+
+        document.querySelectorAll('[data-abrir-anexo]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var url  = btn.dataset.url;
+                var tipo = btn.dataset.tipo;
+                var nome = btn.dataset.nome || 'Anexo';
+
+                titulo.textContent = nome;
+                baixar.href = url + (url.indexOf('?') !== -1 ? '&' : '?') + 'download=1';
+
+                if (tipo === 'pdf') {
+                    container.innerHTML =
+                        '<iframe src="' + VIEWER + encodeURIComponent(url) + '" ' +
+                        'style="width:100%;height:100%;border:0;" allow="fullscreen"></iframe>';
+                } else {
+                    container.innerHTML =
+                        '<div style="height:100%;display:flex;align-items:center;justify-content:center;overflow:auto;padding:1rem;">' +
+                        '<img src="' + url + '" alt="" style="max-width:100%;max-height:100%;">' +
+                        '</div>';
+                }
+                modal.show();
+            });
+        });
+
+        // Libera o iframe ao fechar (para renderização/PDF.js de processar).
+        modalEl.addEventListener('hidden.bs.modal', function () {
+            container.innerHTML = '';
+        });
+    })();
+</script>
 @endsection

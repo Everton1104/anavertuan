@@ -152,8 +152,10 @@ class FichaAnamneseController extends Controller
         return redirect()->route('anamneses.nota.edit', $ficha->id)->with('msg', 'Nota salva!');
     }
 
-    // Recebe um ou mais arquivos e anexa à nota. Ficam no disco `public`
-    // (fichas-notas/{ficha_id}/...). Até 5 arquivos por envio, 10 MB cada.
+    // Recebe um ou mais arquivos e anexa à nota. Ficam no disco `local`
+    // (storage/app/private/fichas-notas/{ficha_id}/...) — privado, só acessível
+    // pela rota autenticada showAnexo (não mais por URL pública). Até 5 arquivos
+    // por envio, 10 MB cada.
     public function storeAnexo(Request $request, $id)
     {
         $this->autorizar();
@@ -177,7 +179,7 @@ class FichaAnamneseController extends Controller
         foreach ($v['arquivo'] as $file) {
             // hashName() gera nome único (evita colisão/sobrescrita); mantém a
             // extensão original. O nome original fica em nome_original.
-            $caminho = Storage::disk('public')->putFile($dir, $file);
+            $caminho = Storage::disk('local')->putFile($dir, $file);
             if (!$caminho) {
                 return redirect()->route('anamneses.nota.edit', $ficha->id)
                     ->with('msgErro', 'Falha ao salvar o arquivo "' . $file->getClientOriginalName() . '".');
@@ -201,10 +203,53 @@ class FichaAnamneseController extends Controller
         $this->autorizar();
 
         $anexo = FichaAnexo::where('ficha_id', $id)->findOrFail($anexoId);
-        Storage::disk('public')->delete($anexo->caminho);
+        // Arquivo pode estar no disco local (novo) ou public (legado).
+        if (Storage::disk('local')->exists($anexo->caminho)) {
+            Storage::disk('local')->delete($anexo->caminho);
+        } elseif (Storage::disk('public')->exists($anexo->caminho)) {
+            Storage::disk('public')->delete($anexo->caminho);
+        }
         $anexo->delete();
 
         return redirect()->route('anamneses.nota.edit', $id)->with('msg', 'Anexo removido.');
+    }
+
+    // Serve o binário do anexo (acesso exclusivo de staff). O arquivo pode estar
+    // no disco `local` (novo, privado) ou `public` (legado) — tentamos local
+    // primeiro. Retorna inline para o leitor PDF.js renderizar; ?download=1
+    // força o download. Substitui a antiga URL pública direta do disco public.
+    public function showAnexo(Request $request, $id, $anexoId)
+    {
+        $this->autorizar();
+
+        // Garante que o anexo pertence a uma ficha válida (não excluída).
+        $anexo = FichaAnexo::where('ficha_id', $id)
+            ->whereHas('ficha', fn($q) => $q->where('excluido', 0))
+            ->findOrFail($anexoId);
+
+        $disco = Storage::disk('local')->exists($anexo->caminho) ? 'local' : 'public';
+        if (!Storage::disk($disco)->exists($anexo->caminho)) {
+            abort(404, 'Arquivo não encontrado.');
+        }
+
+        $caminho = Storage::disk($disco)->path($anexo->caminho);
+        $mime    = $anexo->mime ?: (mime_content_type($caminho) ?: 'application/octet-stream');
+
+        // filename* (UTF-8) preserva acentos no nome; filename= é fallback ASCII.
+        $nomeAscii = preg_replace(['/["\\\\]/', '/[^\x20-\x7E]/'], ['', '_'], $anexo->nome_original);
+        $disposicao = 'inline; filename="' . $nomeAscii . '"; filename*=UTF-8\'\'' . rawurlencode($anexo->nome_original);
+
+        if ($request->boolean('download')) {
+            return response()->download($caminho, $anexo->nome_original, [
+                'Content-Type'        => $mime,
+                'Content-Disposition' => str_replace('inline;', 'attachment;', $disposicao),
+            ]);
+        }
+
+        return response()->file($caminho, [
+            'Content-Type'        => $mime,
+            'Content-Disposition' => $disposicao,
+        ]);
     }
 
     // Salva os campos preenchidos (em JSON `dados`). Estrutura espelha o Google

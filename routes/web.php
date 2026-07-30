@@ -211,6 +211,9 @@ Route::middleware('auth')->group(function () {
     // Anexos da nota.
     Route::post('/anamneses/{id}/anexos',             [FichaAnamneseController::class, 'storeAnexo'])->name('anamneses.anexo.store');
     Route::post('/anamneses/{id}/anexos/{anexo}/excluir', [FichaAnamneseController::class, 'destroyAnexo'])->name('anamneses.anexo.destroy');
+    // Servir o binário do anexo (autenticado, staff) — inline para o leitor PDF.js;
+    // ?download=1 força download. Substitui a antiga URL pública do disco public.
+    Route::get ('/anamneses/{id}/anexos/{anexo}',         [FichaAnamneseController::class, 'showAnexo'])->name('anamneses.anexo.show');
     // Soft delete (serve para anamnese e nota).
     Route::post('/anamneses/{id}/excluir',            [FichaAnamneseController::class, 'destroy'])->name('anamneses.destroy');
 });
